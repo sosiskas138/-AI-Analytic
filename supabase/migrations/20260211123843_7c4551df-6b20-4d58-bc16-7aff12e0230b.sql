@@ -1,0 +1,1 @@
+ALTER TABLE public.project_status ADD COLUMN launched_to_production boolean DEFAULT false;

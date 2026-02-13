@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN has_gck boolean NOT NULL DEFAULT false;

@@ -1,0 +1,1 @@
+ALTER TABLE public.suppliers ADD COLUMN price_per_contact numeric NOT NULL DEFAULT 0;

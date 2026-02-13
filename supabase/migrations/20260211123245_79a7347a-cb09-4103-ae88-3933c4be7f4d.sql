@@ -1,0 +1,1 @@
+ALTER TABLE public.project_status ADD COLUMN is_active boolean NOT NULL DEFAULT true;
