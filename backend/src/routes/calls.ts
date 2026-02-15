@@ -11,7 +11,7 @@ router.get('/project/:projectId', authenticate, requireProjectAccess, async (req
     const rawPage = Number(req.query.page) || 1;
     const rawPageSize = Number(req.query.pageSize) || 50;
     const page = Math.max(1, Math.floor(rawPage));
-    const pageSize = Math.min(500, Math.max(1, Math.floor(rawPageSize)));
+    const pageSize = Math.min(5000, Math.max(1, Math.floor(rawPageSize)));
     const { status, phone, startDate, endDate, isGck } = req.query;
 
     let whereConditions = ['c.project_id = $1'];

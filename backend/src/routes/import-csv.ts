@@ -200,13 +200,15 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
         });
 
         try {
-          await query(
+          const insertResult = await query(
             `INSERT INTO calls (project_id, external_call_id, phone_raw, phone_normalized, call_list, skill_base, call_at, duration_seconds, status, end_reason, is_lead, call_attempt_number, is_first_attempt)
              VALUES ${values}
-             ON CONFLICT (project_id, external_call_id) DO NOTHING`,
+             ON CONFLICT (project_id, external_call_id) DO NOTHING
+             RETURNING id`,
             params
           );
-          inserted += batch.length;
+          inserted += insertResult.rowCount ?? 0;
+          skipped += batch.length - (insertResult.rowCount ?? 0);
         } catch (err) {
           console.error('Calls batch upsert error:', err);
           errors += batch.length;

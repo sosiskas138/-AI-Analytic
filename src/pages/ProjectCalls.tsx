@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -40,6 +40,8 @@ export default function ProjectCalls() {
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [tablePage, setTablePage] = useState(1);
+  const TABLE_PAGE_SIZE = 100;
   const queryClient = useQueryClient();
   const { isAdmin } = useAuth();
 
@@ -127,6 +129,13 @@ export default function ProjectCalls() {
       return true;
     });
   }, [allCalls, search, statusFilter, leadFilter, callListFilter, dateRange]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
+  useEffect(() => setTablePage(1), [search, statusFilter, leadFilter, callListFilter, dateRange.from, dateRange.to]);
+  const paginatedCalls = useMemo(
+    () => filtered.slice((tablePage - 1) * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE),
+    [filtered, tablePage]
+  );
 
   // Metrics for filtered data
   const metrics = useMemo(() => {
@@ -320,11 +329,25 @@ export default function ProjectCalls() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  {isAdmin && (
+                    {isAdmin && (
                     <th className="px-4 py-3 w-10">
                       <Checkbox
-                        checked={filtered.length > 0 && selected.size === filtered.slice(0, 500).length}
-                        onCheckedChange={toggleAll}
+                        checked={paginatedCalls.length > 0 && paginatedCalls.every((c) => selected.has(c.id))}
+                        onCheckedChange={() => {
+                          if (paginatedCalls.every((c) => selected.has(c.id))) {
+                            setSelected((prev) => {
+                              const next = new Set(prev);
+                              paginatedCalls.forEach((c) => next.delete(c.id));
+                              return next;
+                            });
+                          } else {
+                            setSelected((prev) => {
+                              const next = new Set(prev);
+                              paginatedCalls.forEach((c) => next.add(c.id));
+                              return next;
+                            });
+                          }
+                        }}
                       />
                     </th>
                   )}
@@ -343,7 +366,7 @@ export default function ProjectCalls() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 500).map((call, i) => (
+                {paginatedCalls.map((call, i) => (
                   <motion.tr
                     key={call.id}
                     initial={{ opacity: 0 }}
@@ -384,11 +407,36 @@ export default function ProjectCalls() {
               </tbody>
             </table>
           </div>
-          {filtered.length > 500 && (
-            <div className="px-4 py-3 text-center text-xs text-muted-foreground border-t border-border">
-              Показано 500 из {filtered.length} записей
-            </div>
-          )}
+          <div className="px-4 py-3 flex items-center justify-between border-t border-border text-sm">
+            <span className="text-muted-foreground">
+              {filtered.length > 0
+                ? `Показано ${(tablePage - 1) * TABLE_PAGE_SIZE + 1}–${Math.min(tablePage * TABLE_PAGE_SIZE, filtered.length)} из ${filtered.length}`
+                : "Нет записей"}
+            </span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={tablePage <= 1}
+                  onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                >
+                  Назад
+                </Button>
+                <span className="px-2 text-muted-foreground">
+                  {tablePage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={tablePage >= totalPages}
+                  onClick={() => setTablePage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Вперёд
+                </Button>
+              </div>
+            )}
+          </div>
         </motion.div>
       )}
     </div>
