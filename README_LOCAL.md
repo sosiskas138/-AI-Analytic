@@ -13,13 +13,11 @@
 docker-compose up -d --build
 ```
 
-### 2. Создание первого администратора
+### 2. Первый вход
 
-```bash
-./create-admin.sh
-```
+При первом запуске бэкенд создаёт администратора: **логин** `admin`, **пароль** `admin1`.
 
-Или вручную через SQL:
+При необходимости создать ещё одного пользователя вручную через SQL:
 ```bash
 docker exec -it telemarketing-postgres psql -U postgres -d telemarketing_analytics
 ```

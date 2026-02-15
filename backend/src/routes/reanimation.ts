@@ -2,6 +2,8 @@ import express from 'express';
 import { query } from '../config/database.js';
 import { authenticate, requireAdmin, requireProjectAccess, AuthRequest } from '../middleware/auth.js';
 
+const MAX_PHONE_NUMBERS_PER_EXPORT = 100_000;
+
 const router = express.Router();
 
 // Get reanimation exports for a project
@@ -25,6 +27,9 @@ router.post('/exports', authenticate, requireAdmin, async (req: AuthRequest, res
 
     if (!project_id || !phone_numbers || !Array.isArray(phone_numbers)) {
       return res.status(400).json({ error: 'Invalid payload' });
+    }
+    if (phone_numbers.length > MAX_PHONE_NUMBERS_PER_EXPORT) {
+      return res.status(400).json({ error: `Too many phone numbers. Maximum ${MAX_PHONE_NUMBERS_PER_EXPORT} per export.` });
     }
 
     // Check project access
@@ -81,11 +86,29 @@ router.get('/exports', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// Get export numbers
-router.get('/exports/:exportId/numbers', authenticate, async (req, res) => {
+// Get export numbers (user must have access to the export's project)
+router.get('/exports/:exportId/numbers', authenticate, async (req: AuthRequest, res) => {
   try {
     const { exportId } = req.params;
     const { page = 1, pageSize = 1000 } = req.query;
+
+    const exportRow = await query(
+      'SELECT project_id FROM reanimation_exports WHERE id = $1',
+      [exportId]
+    );
+    if (exportRow.rows.length === 0) {
+      return res.status(404).json({ error: 'Export not found' });
+    }
+    const projectId = exportRow.rows[0].project_id;
+    if (!req.user!.isAdmin) {
+      const member = await query(
+        'SELECT 1 FROM project_members WHERE user_id = $1 AND project_id = $2',
+        [req.user!.userId, projectId]
+      );
+      if (member.rows.length === 0) {
+        return res.status(403).json({ error: 'No access to this export' });
+      }
+    }
 
     const offset = (Number(page) - 1) * Number(pageSize);
     const result = await query(

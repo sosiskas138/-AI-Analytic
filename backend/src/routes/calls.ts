@@ -8,7 +8,11 @@ const router = express.Router();
 router.get('/project/:projectId', authenticate, requireProjectAccess, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { page = 1, pageSize = 50, status, phone, startDate, endDate, isGck } = req.query;
+    const rawPage = Number(req.query.page) || 1;
+    const rawPageSize = Number(req.query.pageSize) || 50;
+    const page = Math.max(1, Math.floor(rawPage));
+    const pageSize = Math.min(500, Math.max(1, Math.floor(rawPageSize)));
+    const { status, phone, startDate, endDate, isGck } = req.query;
 
     let whereConditions = ['c.project_id = $1'];
     const values: any[] = [projectId];

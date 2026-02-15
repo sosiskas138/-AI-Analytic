@@ -32,31 +32,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    const done = () => {
+      if (!cancelled) setLoading(false);
+    };
     const checkAuth = async () => {
       try {
         const user = await api.getMe();
-        setSession({ user });
-        setIsAdmin(user.role === 'admin');
+        if (!cancelled) {
+          setSession({ user });
+          setIsAdmin(user.role === 'admin');
+        }
       } catch (error) {
-        setSession(null);
-        setIsAdmin(false);
-        localStorage.removeItem('auth_token');
+        if (!cancelled) {
+          setSession(null);
+          setIsAdmin(false);
+          localStorage.removeItem('auth_token');
+        }
       } finally {
-        setLoading(false);
+        done();
       }
     };
 
-    checkAuth();
+    // Макс. 1 с ожидания — затем показать логин (если бэкенд не отвечает)
+    const t1 = setTimeout(done, 1000);
+    // Страховка: гарантированно снять loading через 5 с
+    const t2 = setTimeout(done, 5000);
+    checkAuth().finally(() => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    });
 
-    // Check auth on storage change (for multi-tab support)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'auth_token') {
-        checkAuth();
-      }
+      if (e.key === 'auth_token') checkAuth();
     };
-
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const signOut = async () => {

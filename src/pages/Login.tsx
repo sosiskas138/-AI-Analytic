@@ -82,6 +82,9 @@ export default function Login() {
             {loading ? "Загрузка..." : "Войти"}
             {!loading && <ArrowRight className="h-4 w-4" />}
           </Button>
+          <p className="text-xs text-muted-foreground text-center mt-3">
+            Первый запуск: логин <kbd className="px-1 py-0.5 rounded bg-muted">admin</kbd>, пароль <kbd className="px-1 py-0.5 rounded bg-muted">admin1</kbd>
+          </p>
         </form>
       </motion.div>
     </div>

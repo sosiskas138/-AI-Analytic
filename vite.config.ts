@@ -9,10 +9,10 @@ export default defineConfig(() => ({
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            if (id.includes("react") || id.includes("react-dom") || id.includes("react-router")) {
+            // recharts должен грузиться вместе с React — иначе "Cannot access uninitialized variable"
+            if (id.includes("react") || id.includes("react-dom") || id.includes("react-router") || id.includes("recharts")) {
               return "vendor-react";
             }
-            if (id.includes("recharts")) return "vendor-charts";
             if (id.includes("@radix-ui")) return "vendor-ui";
             if (id.includes("xlsx") || id.includes("framer-motion")) return "vendor-heavy";
           }

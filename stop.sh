@@ -1,7 +1,7 @@
 #!/bin/bash
 
+export COMPOSE_PROJECT_NAME=telemarketing
+
 echo "🛑 Остановка проекта..."
-
-docker-compose -p telemarketing down
-
+docker compose down
 echo "✅ Проект остановлен"

@@ -4,6 +4,8 @@ import { authenticate, requireAdmin, requireProjectAccess, AuthRequest } from '.
 
 const router = express.Router();
 
+const ALLOWED_STATUS_KEYS = ['responsible'] as const;
+
 // Get all projects
 router.get('/', authenticate, async (req: AuthRequest, res) => {
   try {
@@ -314,7 +316,15 @@ router.get('/:projectId/status', authenticate, requireProjectAccess, async (req,
 router.put('/:projectId/status', authenticate, requireProjectAccess, async (req, res) => {
   try {
     const projectId = req.params.projectId;
-    const updateData = req.body;
+    const updateData: Record<string, unknown> = {};
+    for (const key of ALLOWED_STATUS_KEYS) {
+      if (req.body[key] !== undefined) {
+        updateData[key] = req.body[key];
+      }
+    }
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No allowed fields to update' });
+    }
 
     // Check if status exists
     const existing = await query(

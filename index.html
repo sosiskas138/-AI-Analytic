@@ -8,7 +8,28 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <p style="font-family:system-ui,sans-serif;text-align:center;padding:2rem;color:#64748b">Загрузка...</p>
+    </div>
+    <noscript>
+      <p style="font-family:system-ui,sans-serif;text-align:center;padding:2rem;color:#64748b">Для работы приложения необходим JavaScript. Включите его в настройках браузера.</p>
+    </noscript>
+    <script>
+      window.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+          var root = document.getElementById('root');
+          var hasForm = root && root.querySelector('form');
+          var onlyLoading = root && root.children.length === 1 && !hasForm && (
+            root.querySelector('p') || (root.textContent && root.textContent.includes('Загрузка'))
+          );
+          if (onlyLoading) {
+            root.innerHTML = '<div style="font-family:system-ui,sans-serif;text-align:center;padding:2rem;max-width:400px;margin:0 auto;color:#334155">' +
+              '<p style="margin-bottom:1rem">Приложение не загрузилось.</p>' +
+              '<p><a href="/login" style="color:#2563eb">Открыть страницу входа</a></p></div>';
+          }
+        }, 4000);
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

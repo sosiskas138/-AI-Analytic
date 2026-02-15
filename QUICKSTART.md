@@ -6,33 +6,19 @@
 ./start.sh
 ```
 
-Этот скрипт:
-1. ✅ Проверит наличие Docker
-2. ✅ Создаст файлы `.env` если их нет
-3. ✅ Соберет все контейнеры
-4. ✅ Запустит все сервисы
+Скрипт задаёт имя проекта `telemarketing` (чтобы папка с кириллицей/пробелами не ломала docker compose), собирает образы и поднимает контейнеры.
 
-## Создание первого администратора
-
-После запуска создайте первого пользователя:
-
+**Если сборка в IDE падает с ошибкой gRPC/buildx** — запустите из обычного терминала:
 ```bash
-./create-admin.sh
+cd "путь/к/проекту"
+./start.sh
 ```
 
-Или вручную через SQL:
-```bash
-docker exec -it telemarketing-postgres psql -U postgres -d telemarketing_analytics
-```
+## Первый вход
 
-```sql
--- Пароль: admin123 (замените хеш на свой)
-INSERT INTO users (email, password_hash) 
-VALUES ('admin@app.local', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy');
-
-INSERT INTO user_roles (user_id, role)
-SELECT id, 'admin'::app_role FROM users WHERE email = 'admin@app.local';
-```
+При первом запуске бэкенд сам создаёт администратора:
+- **Логин:** `admin`
+- **Пароль:** `admin1`
 
 ## Доступ к приложению
 
@@ -43,21 +29,32 @@ SELECT id, 'admin'::app_role FROM users WHERE email = 'admin@app.local';
   - Password: `postgres`
   - Database: `telemarketing_analytics`
 
+## Проверка доступности (Postgres + API + фронт)
+
+После запуска проверьте, что страницы и API отвечают:
+
+```bash
+./check-site.sh
+```
+
+Скрипт проверит: главную, API health, auth, статику, маршруты /login и /projects, логин в API.
+
 ## Полезные команды
 
 ```bash
 # Просмотр логов
-docker-compose -p telemarketing logs -f
+docker compose logs -f
 
 # Остановка
 ./stop.sh
 
 # Перезапуск
-docker-compose -p telemarketing restart
+docker compose restart
 
 # Статус сервисов
-docker-compose -p telemarketing ps
+docker compose ps
 ```
+(Имя проекта задаётся в `start.sh` через `COMPOSE_PROJECT_NAME=telemarketing`.)
 
 ## Структура сервисов
 
@@ -81,20 +78,29 @@ nginx:
 
 ### Ошибки при сборке
 
+**Ошибка `x-docker-expose-session-sharedkey contains non-printable ASCII` (Buildx/gRPC):**  
+Соберите с классическим builder:
 ```bash
-# Очистка и пересборка
-docker-compose -p telemarketing down -v
-docker-compose -p telemarketing build --no-cache
-docker-compose -p telemarketing up -d
+export COMPOSE_PROJECT_NAME=telemarketing
+export DOCKER_BUILDKIT=0
+export COMPOSE_DOCKER_CLI_BUILD=0
+docker compose build --no-cache
+docker compose up -d
+```
+Или просто запустите `./start.sh` — в нём уже заданы эти переменные.
+
+**Обычная пересборка:**
+```bash
+export COMPOSE_PROJECT_NAME=telemarketing
+docker compose down -v
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### База данных не инициализирована
 
 ```bash
-# Проверка логов БД
-docker-compose -p telemarketing logs postgres
-
-# Ручная инициализация
+docker compose logs postgres
 docker exec -i telemarketing-postgres psql -U postgres -d telemarketing_analytics < backend/database/schema.sql
 ```
 

@@ -1,3 +1,5 @@
+name: telemarketing
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -32,7 +34,7 @@ services:
       JWT_EXPIRES_IN: 7d
       PORT: 3001
       NODE_ENV: development
-      CORS_ORIGIN: http://localhost
+      CORS_ORIGIN: http://localhost,http://localhost:8080
     depends_on:
       postgres:
         condition: service_healthy

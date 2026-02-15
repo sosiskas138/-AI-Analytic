@@ -12,7 +12,11 @@ export function ConfigError() {
         <div className="text-left space-y-2 text-sm text-muted-foreground">
           <p>Для работы приложения необходимо создать файл <code className="bg-muted px-1 py-0.5 rounded">.env</code> в корне проекта со следующей переменной:</p>
           <pre className="bg-muted p-4 rounded text-xs overflow-auto">
-{`VITE_API_URL=http://localhost:3001/api`}
+{`# Локальная разработка (фронт на :8080, бэкенд на :3001):
+VITE_API_URL=http://localhost:3001/api
+
+# Запуск через Docker (фронт и API за nginx на :80):
+VITE_API_URL=http://localhost/api`}
           </pre>
           <p className="pt-2">Скопируйте файл <code className="bg-muted px-1 py-0.5 rounded">.env.example</code> в <code className="bg-muted px-1 py-0.5 rounded">.env</code> и укажите URL вашего API сервера.</p>
           <p>Убедитесь, что бэкенд сервер запущен и доступен по указанному адресу.</p>

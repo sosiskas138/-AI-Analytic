@@ -5,9 +5,14 @@ dotenv.config();
 
 const { Pool } = pg;
 
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set — проверьте .env или переменные окружения контейнера');
+}
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 10000,
 });
 
 export async function query(text: string, params?: any[]) {

@@ -57,6 +57,10 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
     if (!project_id || !type || !rows || !Array.isArray(rows)) {
       return res.status(400).json({ error: 'Invalid payload' });
     }
+    const MAX_ROWS = 50_000;
+    if (rows.length > MAX_ROWS) {
+      return res.status(400).json({ error: `Too many rows. Maximum ${MAX_ROWS} per request.` });
+    }
 
     let inserted = 0;
     let skipped = 0;

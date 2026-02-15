@@ -7,7 +7,8 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    timeoutMs = 10000
   ): Promise<T> {
     const token = this.getToken();
     const headers: HeadersInit = {
@@ -19,10 +20,19 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const { signal: _skip, ...restOptions } = options;
+
+    try {
+      var response = await fetch(`${API_URL}${endpoint}`, {
+        ...restOptions,
+        headers,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       // Handle 401 Unauthorized - clear token and redirect to login
@@ -52,6 +62,13 @@ class ApiClient {
       throw new Error(errorMessage);
     }
 
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && !contentType.includes('application/json')) {
+      return undefined as T;
+    }
     return response.json();
   }
 
