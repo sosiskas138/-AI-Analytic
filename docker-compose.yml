@@ -1,11 +1,11 @@
-name: telemarketing
+name: ${COMPOSE_PROJECT_NAME:-telemarketing}
 
 services:
   postgres:
     image: postgres:15-alpine
     container_name: telemarketing-postgres
     environment:
-      POSTGRES_DB: telemarketing_analytics
+      POSTGRES_DB: ${POSTGRES_DB:-telemarketing_analytics}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,11 +29,11 @@ services:
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/telemarketing_analytics
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-telemarketing_analytics}
       JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-in-production}
-      JWT_EXPIRES_IN: 7d
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 3001
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV:-development}
       APP_PORT: ${APP_PORT:-8080}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost,http://localhost:8080,http://127.0.0.1:8080}
     depends_on:
