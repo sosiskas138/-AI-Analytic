@@ -29,15 +29,18 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Подсказка при открытии корня (чтобы не путать с фронтом на :80)
-app.get('/', (_req, res) => {
+// Подсказка при открытии корня backend напрямую (интерфейс — через nginx)
+app.get('/', (req, res) => {
+  const host = (req.get('host') || req.get('x-forwarded-host') || 'localhost').replace(/:\d+$/, '');
+  const appPort = process.env.APP_PORT || '8080';
+  const appUrl = host === 'localhost' ? `http://localhost:${appPort}` : `http://${host}:${appPort}`;
   res.type('html').send(`
     <!DOCTYPE html>
-    <html><body style="font-family:sans-serif;padding:2rem;max-width:500px;">
+    <html><body style="font-family:sans-serif;padding:2rem;max-width:520px;">
       <h1>Аналитика звонков — API</h1>
-      <p>Это сервер API. Интерфейс приложения открывайте по адресу:</p>
-      <p><a href="http://localhost">http://localhost</a></p>
-      <p><small>Docker: открывайте порт 80. Локально: <code>npm run dev</code> в корне → http://localhost:8080</small></p>
+      <p>Вы открыли сервер API напрямую. Интерфейс приложения — через nginx:</p>
+      <p><a href="${appUrl}">${appUrl}</a></p>
+      <p><small>VPS: откройте порт ${appPort} в фаерволе. Локально: http://localhost:${appPort}</small></p>
     </body></html>
   `);
 });
