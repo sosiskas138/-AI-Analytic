@@ -187,24 +187,48 @@ export default function ProjectSuppliersGCK() {
   }, [suppliers, supplierNumbers, calls, dateRange, selectedSupplier]);
 
   const totals = useMemo(() => {
-    if (report.length === 0) return null;
-    let received = 0, called = 0, answered = 0, leads = 0, totalSpent = 0;
-    for (const r of report) {
-      received += r.received;
-      called += r.called;
-      answered += r.answered;
-      leads += r.leads;
-      totalSpent += r.spent;
+    if (!suppliers || !supplierNumbers || !calls) return null;
+    const phoneToSupplierId = new Map<string, string>();
+    const supplierPhones = new Map<string, Set<string>>();
+    const filteredSuppliers = selectedSupplier === "all" ? suppliers : suppliers.filter((s) => s.id === selectedSupplier);
+    for (const s of filteredSuppliers) supplierPhones.set(s.id, new Set());
+    for (const sn of supplierNumbers) {
+      if (!supplierPhones.has(sn.supplier_id)) continue;
+      phoneToSupplierId.set(sn.phone_normalized, sn.supplier_id);
+      supplierPhones.get(sn.supplier_id)!.add(sn.phone_normalized);
     }
+    let totalReceived = 0;
+    for (const [, set] of supplierPhones) totalReceived += set.size;
+    const calledPhones = new Set<string>();
+    const answeredPhones = new Set<string>();
+    const leadPhones = new Set<string>();
+    for (const c of calls) {
+      if (dateRange.from || dateRange.to) {
+        const date = c.call_at?.slice(0, 10);
+        if (dateRange.from && date && date < format(dateRange.from, "yyyy-MM-dd")) continue;
+        if (dateRange.to && date && date > format(dateRange.to, "yyyy-MM-dd")) continue;
+      }
+      if (!phoneToSupplierId.has(c.phone_normalized)) continue;
+      calledPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
+      if (c.is_lead) leadPhones.add(c.phone_normalized);
+    }
+    const called = calledPhones.size;
+    const answered = answeredPhones.size;
+    const leads = leadPhones.size;
+    const totalSpent = report.reduce((s, r) => s + r.spent, 0);
     return {
-      received, called, answered, leads,
-      call_rate: received > 0 ? +((called / received) * 100).toFixed(1) : 0,
+      received: totalReceived,
+      called,
+      answered,
+      leads,
+      call_rate: totalReceived > 0 ? +((called / totalReceived) * 100).toFixed(1) : 0,
       answer_rate: called > 0 ? +((answered / called) * 100).toFixed(1) : 0,
       conversion_rate: answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0,
       spent: totalSpent,
       cost_per_lead: leads > 0 ? Math.round(totalSpent / leads) : 0,
     };
-  }, [report]);
+  }, [report, suppliers, supplierNumbers, calls, dateRange, selectedSupplier]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);
