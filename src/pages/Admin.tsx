@@ -887,17 +887,16 @@ export default function Admin() {
             const numbers = allNumbers?.filter((n) => n.project_id === project.id) || [];
             const uniquePhones = new Set(calls.map((c: any) => c.phone_normalized));
             const uniqueCalls = uniquePhones.size;
-            const answeredPhones = new Set<string>();
             const leadPhones = new Set<string>();
             for (const c of calls) {
-              if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
               if (c.is_lead) leadPhones.add(c.phone_normalized);
             }
-            const answered = answeredPhones.size;
+            const answered = calls.filter((c) => isStatusSuccessful(c.status)).length;
             const leads = leadPhones.size;
-            const answerRate = uniqueCalls > 0 ? ((answered / uniqueCalls) * 100).toFixed(1) : "0";
+            const totalCalls = calls.length;
+            const answerRate = totalCalls > 0 ? ((answered / totalCalls) * 100).toFixed(1) : "0";
             const uniqueContacts = numbers.filter((n) => !n.is_duplicate_in_project).length;
-            const convCall = uniqueCalls > 0 ? ((answered / uniqueCalls) * 100).toFixed(1) : "0";
+            const convCall = totalCalls > 0 ? ((answered / totalCalls) * 100).toFixed(1) : "0";
             const convLead = answered > 0 ? ((leads / answered) * 100).toFixed(1) : "0";
 
             // Costs

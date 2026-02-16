@@ -61,7 +61,6 @@ export default function ProjectCallListDetail() {
 
     const byDate = new Map<string, {
       calledPhones: Set<string>;
-      answeredPhones: Set<string>;
       leadPhones: Set<string>;
       totalCalls: number;
       answeredCalls: number;
@@ -76,7 +75,6 @@ export default function ProjectCallListDetail() {
       if (!byDate.has(date)) {
         byDate.set(date, {
           calledPhones: new Set(),
-          answeredPhones: new Set(),
           leadPhones: new Set(),
           totalCalls: 0,
           answeredCalls: 0,
@@ -89,7 +87,6 @@ export default function ProjectCallListDetail() {
 
       if (isStatusSuccessful(c.status)) {
         entry.answeredCalls++;
-        entry.answeredPhones.add(c.phone_normalized);
       }
       if (c.is_lead) {
         entry.leadPhones.add(c.phone_normalized);
@@ -101,9 +98,9 @@ export default function ProjectCallListDetail() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, d]) => {
         const received = d.calledPhones.size;
-        const answered = d.answeredPhones.size;
+        const answered = d.answeredCalls;
         const leads = d.leadPhones.size;
-        const answerRate = received > 0 ? +((answered / received) * 100).toFixed(1) : 0;
+        const answerRate = d.totalCalls > 0 ? +((answered / d.totalCalls) * 100).toFixed(1) : 0;
         const conversionRate = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
         const spent = received * ppc;

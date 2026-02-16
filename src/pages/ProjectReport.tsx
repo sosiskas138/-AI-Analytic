@@ -126,17 +126,18 @@ export default function ProjectReport() {
     }
 
     // Group calls by day — only count phones that exist in received set
-    const callsByDay = new Map<string, { uniquePhones: Set<string>; answeredPhones: Set<string>; leadPhones: Set<string> }>();
+    const callsByDay = new Map<string, { totalCalls: number; answeredCalls: number; calledPhones: Set<string>; leadPhones: Set<string> }>();
     for (const c of filteredCalls) {
       if (!receivedPhonesSet.has(c.phone_normalized)) continue;
       const day = c.call_at?.slice(0, 10);
       if (!day) continue;
       if (!callsByDay.has(day)) {
-        callsByDay.set(day, { uniquePhones: new Set(), answeredPhones: new Set(), leadPhones: new Set() });
+        callsByDay.set(day, { totalCalls: 0, answeredCalls: 0, calledPhones: new Set(), leadPhones: new Set() });
       }
       const entry = callsByDay.get(day)!;
-      entry.uniquePhones.add(c.phone_normalized);
-      if (isStatusSuccessful(c.status)) entry.answeredPhones.add(c.phone_normalized);
+      entry.totalCalls++;
+      entry.calledPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) entry.answeredCalls++;
       if (c.is_lead) entry.leadPhones.add(c.phone_normalized);
     }
 
@@ -146,18 +147,18 @@ export default function ProjectReport() {
     return sorted.map((day) => {
       const contacts = contactsByDay.get(day)?.size || 0;
       const cd = callsByDay.get(day);
-      const uniquePhones = cd?.uniquePhones.size || 0;
-      const answered = cd?.answeredPhones.size || 0;
+      const totalCalls = cd?.totalCalls || 0;
+      const answered = cd?.answeredCalls || 0;
       const leads = cd?.leadPhones.size || 0;
 
-      const answerRate = uniquePhones > 0 ? +((answered / uniquePhones) * 100).toFixed(1) : 0;
-      const convCall = contacts > 0 ? +((uniquePhones / contacts) * 100).toFixed(1) : 0;
+      const answerRate = totalCalls > 0 ? +((answered / totalCalls) * 100).toFixed(1) : 0;
+      const convCall = contacts > 0 ? +(((cd?.calledPhones.size || 0) / contacts) * 100).toFixed(1) : 0;
       const convLead = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
 
       return {
         date: format(new Date(day), "dd.MM", { locale: ru }),
         contacts,
-        calls: uniquePhones,
+        calls: totalCalls,
         answered,
         answerRate,
         convCall,
@@ -287,7 +288,7 @@ export default function ProjectReport() {
               {(() => {
                 const totContacts = dailyData.reduce((s, d) => s + d.contacts, 0);
                 const totAnswered = filteredCalls
-                  ? new Set(filteredCalls.filter((c: any) => isStatusSuccessful(c.status) && receivedPhonesSet.has(c.phone_normalized)).map((c: any) => c.phone_normalized)).size
+                  ? filteredCalls.filter((c: any) => isStatusSuccessful(c.status) && receivedPhonesSet.has(c.phone_normalized)).length
                   : 0;
                 const totLeads = filteredCalls
                   ? new Set(filteredCalls.filter((c: any) => c.is_lead && receivedPhonesSet.has(c.phone_normalized)).map((c: any) => c.phone_normalized)).size

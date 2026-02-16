@@ -144,28 +144,43 @@ export default function ProjectDashboard() {
     const totalCalls = allCalls.length;
     const uniquePhones = new Set(allCalls.map((c: any) => c.phone_normalized));
     const uniqueCalls = uniquePhones.size;
-    const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of allCalls) {
-      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
-    const answered = answeredPhones.size;
+    const answered = allCalls.filter((c: any) => isStatusSuccessful(c.status)).length;
     const leads = leadPhones.size;
-    const answerRate = uniqueCalls > 0 ? ((answered / uniqueCalls) * 100) : 0;
+    const answerRate = totalCalls > 0 ? ((answered / totalCalls) * 100) : 0;
     const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
     return { totalContacts, totalCalls, uniqueCalls, answered, answerRate, leads, totalMinutes };
   }, [allCalls, allNumbers]);
 
   // ---- Финансы ----
   const finance = useMemo(() => {
-    const contactsCost = allNumbers.reduce((sum: number, n: any) => sum + (n.suppliers?.price_per_contact ?? 0), 0);
-    const pricePerMinute = pricing?.price_per_minute ?? 0;
+    // Считаем стоимость по поставщикам (включая ГЦК): число контактов × price_per_contact
+    const supplierCounts = new Map<string, number>();
+    for (const n of allNumbers) {
+      const sid = n.supplier_id;
+      if (!sid) continue;
+      supplierCounts.set(sid, (supplierCounts.get(sid) || 0) + 1);
+    }
+    let contactsCost = 0;
+    for (const s of suppliers || []) {
+      const count = supplierCounts.get(s.id) || 0;
+      const ppc = Number((s as any).price_per_contact) || 0;
+      contactsCost += count * ppc;
+    }
+    // Fallback: если у поставщиков нет цены, используем проектную price_per_number
+    if (contactsCost === 0 && allNumbers.length > 0) {
+      const pricePerNumber = Number((pricing as any)?.price_per_number) || 0;
+      contactsCost = allNumbers.length * pricePerNumber;
+    }
+    const pricePerMinute = Number(pricing?.price_per_minute) || 0;
     const minutesCost = metrics.totalMinutes * pricePerMinute;
     const totalCost = contactsCost + minutesCost;
     const costPerLead = metrics.leads > 0 ? totalCost / metrics.leads : 0;
     return { contactsCost, pricePerMinute, minutesCost, totalCost, costPerLead };
-  }, [allNumbers, pricing, metrics]);
+  }, [allNumbers, suppliers, pricing, metrics]);
 
   // ---- Базы (per supplier) ----
   const supplierStats = useMemo(() => {
@@ -179,9 +194,9 @@ export default function ProjectDashboard() {
       supplierPhones.get(sn.supplier_id)!.add(sn.phone_normalized);
     }
 
-    const bySupplier = new Map<string, { calledPhones: Set<string>; answeredPhones: Set<string>; leadPhones: Set<string> }>();
+    const bySupplier = new Map<string, { calledPhones: Set<string>; totalCalls: number; answeredCalls: number; leadPhones: Set<string> }>();
     for (const s of suppliers) {
-      bySupplier.set(s.id, { calledPhones: new Set(), answeredPhones: new Set(), leadPhones: new Set() });
+      bySupplier.set(s.id, { calledPhones: new Set(), totalCalls: 0, answeredCalls: 0, leadPhones: new Set() });
     }
 
     for (const c of allCalls) {
@@ -190,7 +205,8 @@ export default function ProjectDashboard() {
       const entry = bySupplier.get(sid);
       if (!entry) continue;
       entry.calledPhones.add(c.phone_normalized);
-      if (isStatusSuccessful(c.status)) entry.answeredPhones.add(c.phone_normalized);
+      entry.totalCalls++;
+      if (isStatusSuccessful(c.status)) entry.answeredCalls++;
       if (c.is_lead) entry.leadPhones.add(c.phone_normalized);
     }
 
@@ -198,7 +214,8 @@ export default function ProjectDashboard() {
       const received = supplierPhones.get(s.id)?.size || 0;
       const d = bySupplier.get(s.id)!;
       const called = d.calledPhones.size;
-      const ans = d.answeredPhones.size;
+      const totalCalls = d.totalCalls;
+      const ans = d.answeredCalls;
       const lds = d.leadPhones.size;
       return {
         name: s.name || s.tag || "—",
@@ -206,7 +223,7 @@ export default function ProjectDashboard() {
         received,
         called,
         callRate: received > 0 ? +((called / received) * 100).toFixed(1) : 0,
-        answerRate: called > 0 ? +((ans / called) * 100).toFixed(1) : 0,
+        answerRate: totalCalls > 0 ? +((ans / totalCalls) * 100).toFixed(1) : 0,
         convRate: ans > 0 ? +((lds / ans) * 100).toFixed(1) : 0,
         leads: lds,
       };
@@ -236,21 +253,20 @@ export default function ProjectDashboard() {
     
     const receivedPhones = new Set(gckNumbers.map((n: any) => n.phone_normalized));
     const calledPhones = new Set(gckCalls.map((c: any) => c.phone_normalized));
-    const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of gckCalls) {
-      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
     const received = receivedPhones.size;
     const called = calledPhones.size;
-    const ans = answeredPhones.size;
+    const totalGckCalls = gckCalls.length;
+    const ans = gckCalls.filter((c: any) => isStatusSuccessful(c.status)).length;
     const lds = leadPhones.size;
     return {
       received,
       called,
       callRate: received > 0 ? +((called / received) * 100).toFixed(1) : 0,
-      answerRate: called > 0 ? +((ans / called) * 100).toFixed(1) : 0,
+      answerRate: totalGckCalls > 0 ? +((ans / totalGckCalls) * 100).toFixed(1) : 0,
       convRate: ans > 0 ? +((lds / ans) * 100).toFixed(1) : 0,
       leads: lds,
     };
@@ -259,23 +275,23 @@ export default function ProjectDashboard() {
   // ---- Daily trend data ----
   const dailyData = useMemo(() => {
     if (!allCalls.length) return [];
-    const byDay = new Map<string, { uniquePhones: Set<string>; answeredPhones: Set<string>; leadPhones: Set<string> }>();
+    const byDay = new Map<string, { totalCalls: number; answeredCalls: number; leadPhones: Set<string> }>();
     for (const c of allCalls) {
       const day = c.call_at?.slice(0, 10);
       if (!day) continue;
-      if (!byDay.has(day)) byDay.set(day, { uniquePhones: new Set(), answeredPhones: new Set(), leadPhones: new Set() });
+      if (!byDay.has(day)) byDay.set(day, { totalCalls: 0, answeredCalls: 0, leadPhones: new Set() });
       const e = byDay.get(day)!;
-      e.uniquePhones.add(c.phone_normalized);
-      if (isStatusSuccessful(c.status)) e.answeredPhones.add(c.phone_normalized);
+      e.totalCalls++;
+      if (isStatusSuccessful(c.status)) e.answeredCalls++;
       if (c.is_lead) e.leadPhones.add(c.phone_normalized);
     }
     return [...byDay.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([day, d]) => ({
         date: format(new Date(day), "dd.MM", { locale: ru }),
-        calls: d.uniquePhones.size,
+        calls: d.totalCalls,
         leads: d.leadPhones.size,
-        answerRate: d.uniquePhones.size > 0 ? +((d.answeredPhones.size / d.uniquePhones.size) * 100).toFixed(1) : 0,
+        answerRate: d.totalCalls > 0 ? +((d.answeredCalls / d.totalCalls) * 100).toFixed(1) : 0,
       }));
   }, [allCalls]);
 
@@ -348,27 +364,8 @@ export default function ProjectDashboard() {
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Общее</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <KPICard title="Контактов обработано" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.05 }}
-            className="glass-card rounded-xl p-5 kpi-glow hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-center gap-1 mb-3">
-              <span className="text-sm font-medium text-muted-foreground">Дозвонились</span>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-baseline gap-2">
-                <span className="text-xs text-muted-foreground">Количество</span>
-                <span className="text-xl font-bold">{metrics.answered.toLocaleString()}</span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xs text-muted-foreground">Успешный</span>
-                <span className="text-xl font-bold text-success">{metrics.leads.toLocaleString()}</span>
-              </div>
-            </div>
-          </motion.div>
-          <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" />
+          <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={PhoneCall} delay={0.05} info="Количество звонков со статусом «Успешный»" />
+          <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
           <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Доля отвеченных от контактов" />
         </div>
 
@@ -413,7 +410,7 @@ export default function ProjectDashboard() {
         <p className="text-[11px] font-semibold text-primary/70 uppercase tracking-wider mb-3">Финансы</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <KPICard title="Стоимость контактов" value={finance.contactsCost > 0 ? finance.contactsCost.toLocaleString() : "—"} icon={DollarSign} delay={0.15} info="Сумма стоимости контакта по каждому поставщику" />
-          <KPICard title="Стоимость минут" value={finance.minutesCost > 0 ? finance.minutesCost.toLocaleString() : "—"} icon={DollarSign} delay={0.2} info={`Минуты × Цена за минуту (${finance.pricePerMinute})`} />
+          <KPICard title="Стоимость минут" value={finance.minutesCost > 0 ? finance.minutesCost.toLocaleString() : "—"} icon={DollarSign} delay={0.2} info="Минуты × Цена за минуту" />
           <KPICard title="Общая стоимость" value={finance.totalCost > 0 ? finance.totalCost.toLocaleString() : "—"} icon={DollarSign} delay={0.25} info="Стоимость контактов + Стоимость минут" />
           <KPICard title="CPL" value={finance.costPerLead > 0 ? finance.costPerLead.toFixed(0) : "—"} icon={Target} delay={0.3} info="Cost Per Lead = Общая стоимость / Лиды" />
         </div>

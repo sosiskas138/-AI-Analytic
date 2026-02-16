@@ -14,9 +14,10 @@ interface KPICardProps {
   trend?: { value: number; positive: boolean };
   delay?: number;
   info?: string;
+  valueClassName?: string;
 }
 
-export function KPICard({ title, value, subtitle, icon: Icon, trend, delay = 0, info }: KPICardProps) {
+export function KPICard({ title, value, subtitle, icon: Icon, trend, delay = 0, info, valueClassName }: KPICardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -40,7 +41,7 @@ export function KPICard({ title, value, subtitle, icon: Icon, trend, delay = 0, 
         )}
       </div>
       <div className="flex items-end gap-2">
-        <span className="text-2xl font-bold tracking-tight">{value}</span>
+        <span className={valueClassName ? `text-2xl font-bold tracking-tight ${valueClassName}` : "text-2xl font-bold tracking-tight"}>{value}</span>
         {trend && (
           <span className={`text-xs font-medium mb-1 ${trend.positive ? "text-success" : "text-destructive"}`}>
             {trend.positive ? "+" : ""}{trend.value}%

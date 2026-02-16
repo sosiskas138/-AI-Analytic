@@ -54,7 +54,6 @@ export default function ProjectSuppliers() {
     // Group calls by call_list
     const byList = new Map<string, {
       calledPhones: Set<string>;
-      answeredPhones: Set<string>;
       leadPhones: Set<string>;
       totalCalls: number;
       answeredCalls: number;
@@ -71,7 +70,6 @@ export default function ProjectSuppliers() {
       if (!byList.has(listName)) {
         byList.set(listName, {
           calledPhones: new Set(),
-          answeredPhones: new Set(),
           leadPhones: new Set(),
           totalCalls: 0,
           answeredCalls: 0,
@@ -83,10 +81,8 @@ export default function ProjectSuppliers() {
       entry.totalCalls++;
       entry.calledPhones.add(c.phone_normalized);
 
-      const isAnswered = isStatusSuccessful(c.status);
-      if (isAnswered) {
+      if (isStatusSuccessful(c.status)) {
         entry.answeredCalls++;
-        entry.answeredPhones.add(c.phone_normalized);
       }
 
       if (c.is_lead) {
@@ -100,10 +96,10 @@ export default function ProjectSuppliers() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([listName, d]) => {
         const received = d.calledPhones.size;
-        const answered = d.answeredPhones.size;
+        const answered = d.answeredCalls;
         const leads = d.leadPhones.size;
 
-        const answerRate = received > 0 ? +((answered / received) * 100).toFixed(1) : 0;
+        const answerRate = d.totalCalls > 0 ? +((answered / d.totalCalls) * 100).toFixed(1) : 0;
         const conversionRate = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
 

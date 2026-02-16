@@ -18,6 +18,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import { cn } from "@/lib/utils";
 
 type ImportType = "suppliers" | "calls" | "gck";
 
@@ -94,6 +95,12 @@ export default function ProjectImports() {
     enabled: !!projectId,
   });
 
+  const { data: project } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: async () => api.getProject(projectId!),
+    enabled: !!projectId,
+  });
+
   const { data: imports, isLoading } = useQuery({
     queryKey: ["imports", projectId],
     queryFn: async () => {
@@ -102,6 +109,8 @@ export default function ProjectImports() {
     },
     enabled: !!projectId,
   });
+
+  const hasGck = !!(project as any)?.has_gck;
 
   const parseCSVText = (text: string, type: ImportType, filename: string) => {
     const effectiveType = type === "gck" ? "suppliers" : type;
@@ -283,18 +292,21 @@ export default function ProjectImports() {
       desc: "CSV: Name, Tag, Phone",
       type: "suppliers" as ImportType,
       ref: suppliersInputRef,
+      disabled: false,
     },
     {
       title: "Звонки робота",
       desc: "CSV: external_call_id, phone, call_at, duration_seconds, status, ...",
       type: "calls" as ImportType,
       ref: callsInputRef,
+      disabled: false,
     },
     {
       title: "Базы ГЦК",
-      desc: "CSV: Phone (номера от ГЦК-поставщиков)",
+      desc: hasGck ? "CSV: Phone (номера от ГЦК-поставщиков)" : "Включите ГЦК в настройках проекта",
       type: "gck" as ImportType,
       ref: gckInputRef,
+      disabled: !hasGck,
     },
   ];
 
@@ -315,8 +327,13 @@ export default function ProjectImports() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="glass-card rounded-xl p-8 text-center border-2 border-dashed border-border hover:border-primary/40 transition-colors cursor-pointer"
-            onClick={() => zone.ref.current?.click()}
+            className={cn(
+              "glass-card rounded-xl p-8 text-center border-2 border-dashed transition-colors",
+              zone.disabled
+                ? "border-border/50 bg-muted/30 cursor-not-allowed opacity-60"
+                : "border-border hover:border-primary/40 cursor-pointer"
+            )}
+            onClick={() => !zone.disabled && zone.ref.current?.click()}
           >
             <input
               ref={zone.ref}
@@ -324,16 +341,21 @@ export default function ProjectImports() {
               accept=".csv,.xlsx,.xls"
               className="hidden"
               onChange={handleFileSelect(zone.type)}
+              disabled={zone.disabled}
             />
-            <div className="p-3 rounded-xl bg-primary/10 w-fit mx-auto mb-4">
-              <Upload className="h-6 w-6 text-primary" />
+            <div className={cn(
+              "p-3 rounded-xl w-fit mx-auto mb-4",
+              zone.disabled ? "bg-muted" : "bg-primary/10"
+            )}>
+              <Upload className={cn("h-6 w-6", zone.disabled ? "text-muted-foreground" : "text-primary")} />
             </div>
-            <h3 className="font-semibold mb-1">{zone.title}</h3>
+            <h3 className={cn("font-semibold mb-1", zone.disabled && "text-muted-foreground")}>{zone.title}</h3>
             <p className="text-sm text-muted-foreground mb-4">{zone.desc}</p>
             <Button
               variant="outline"
               size="sm"
-              onClick={(e) => { e.stopPropagation(); zone.ref.current?.click(); }}
+              disabled={zone.disabled}
+              onClick={(e) => { e.stopPropagation(); if (!zone.disabled) zone.ref.current?.click(); }}
             >
               Выбрать файл
             </Button>

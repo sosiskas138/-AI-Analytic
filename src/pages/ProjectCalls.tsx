@@ -141,15 +141,13 @@ export default function ProjectCalls() {
   const metrics = useMemo(() => {
     const total = filtered.length;
     const uniquePhones = new Set(filtered.map((c) => c.phone_normalized));
-    const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of filtered) {
-      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
-    const answered = answeredPhones.size;
+    const answered = filtered.filter((c) => isStatusSuccessful(c.status)).length;
     const leads = leadPhones.size;
-    const answerRate = uniquePhones.size > 0 ? (answered / uniquePhones.size) * 100 : 0;
+    const answerRate = total > 0 ? (answered / total) * 100 : 0;
     const avgDuration = total > 0 ? filtered.reduce((s, c) => s + c.duration_seconds, 0) / total : 0;
     return { total, uniquePhones: uniquePhones.size, answered, answerRate, leads, avgDuration };
   }, [filtered]);
