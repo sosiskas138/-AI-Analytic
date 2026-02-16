@@ -119,7 +119,8 @@ export default function ProjectCalls() {
       if (statusFilter !== "all" && c.status !== statusFilter) return false;
       if (leadFilter === "yes" && !c.is_lead) return false;
       if (leadFilter === "no" && c.is_lead) return false;
-      if (callListFilter !== "all" && c.call_list !== callListFilter) return false;
+      if (callListFilter === "none" && (c.call_list != null && c.call_list !== "")) return false;
+      if (callListFilter !== "all" && callListFilter !== "none" && c.call_list !== callListFilter) return false;
       if (dateRange.from) {
         if (new Date(c.call_at) < dateRange.from) return false;
       }
@@ -241,6 +242,7 @@ export default function ProjectCalls() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все колл-листы</SelectItem>
+              <SelectItem value="none">Без колл-листа</SelectItem>
               {callLists.map((cl) => (
                 <SelectItem key={cl} value={cl}>{cl}</SelectItem>
               ))}
