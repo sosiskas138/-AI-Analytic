@@ -389,19 +389,10 @@ export default function ProjectDashboard() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Общее</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-          {(() => {
-            const processed = apiStats?.uniqueCalls ?? metrics.uniqueCalls;
-            const answeredVal = apiStats?.answered ?? metrics.answered;
-            const answerRateDerived = processed > 0 ? +((answeredVal / processed) * 100).toFixed(1) : 0;
-            return (
-              <>
-                <KPICard title="Контактов обработано" value={processed.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
-                <KPICard title="Дозвонились" value={answeredVal.toLocaleString()} icon={PhoneCall} delay={0.05} info="Уникальные номера со статусом «Успешный»" />
-                <KPICard title="Лиды" value={(apiStats?.leads ?? metrics.leads).toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
-                <KPICard title="% дозвона" value={`${answerRateDerived}%`} icon={Signal} delay={0.15} info="Дозвонились / Контактов обработано × 100%" />
-              </>
-            );
-          })()}
+          <KPICard title="Контактов обработано" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
+          <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={PhoneCall} delay={0.05} info="Уникальные номера со статусом «Успешный»" />
+          <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
+          <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Дозвонились / Контактов обработано × 100%" />
         </div>
 
         {/* Daily trend chart */}
