@@ -309,13 +309,15 @@ export default function ProjectSuppliersGCK() {
       </div>
           {/* Summary cards */}
           {totals && (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
-              <KPICard title="Получено номеров" value={totals.received.toLocaleString()} icon={Users} delay={0} info="Общее количество номеров, загруженных от поставщиков" />
-              <KPICard title="Прозвонено" value={`${totals.called.toLocaleString()} (${totals.call_rate}%)`} icon={Phone} delay={0.05} info="Уникальные номера, по которым был хотя бы один звонок" />
-              <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.1} info="Номера со статусом «Успешный» / Прозвонено × 100%" />
-              <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.15} info="Уникальные номера, отмеченные как лид" />
-              <KPICard title="Конверсия в лид" value={`${totals.conversion_rate}%`} icon={TrendingUp} delay={0.2} info="Лиды / Дозвонились × 100%" />
-              <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.25} info="Получено номеров × Стоимость контакта" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+              <KPICard title="Количество контактов" value={totals.received.toLocaleString()} icon={Users} delay={0} info="Получено номеров от поставщиков" />
+              <KPICard title="Количество прозвонили" value={totals.called.toLocaleString()} icon={Phone} delay={0.05} info="Уникальные номера, по которым звонили" />
+              <KPICard title="Количество дозвонились" value={totals.answered.toLocaleString()} icon={PhoneCall} delay={0.1} info="Номера со статусом «Успешный»" />
+              <KPICard title="% прозвонили" value={`${totals.call_rate}%`} icon={Phone} delay={0.12} info="Прозвонили / Контакты × 100%" />
+              <KPICard title="% дозвонились" value={`${totals.answer_rate}%`} icon={PhoneCall} delay={0.15} info="Дозвонились / Прозвонили × 100%" />
+              <KPICard title="% в лид из дозвонившихся" value={`${totals.conversion_rate}%`} icon={Target} delay={0.2} info="Лиды / Дозвонились × 100%" />
+              <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.22} info="Уникальные номера, отмеченные как лид" />
+              <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.25} info="Контакты × Стоимость контакта" />
               <KPICard title="₽ / лид" value={totals.cost_per_lead > 0 ? `${totals.cost_per_lead.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.3} info="Потрачено / Лиды" />
             </div>
           )}
@@ -336,9 +338,9 @@ export default function ProjectSuppliersGCK() {
                     <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                     <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
                     <Legend />
-                    <Bar dataKey="received" name="Получено" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="called" name="Прозвонено" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="answered" name="Дозвон" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="received" name="Контакты" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="called" name="Прозвонили" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="answered" name="Дозвонились" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="leads" name="Лиды" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -350,7 +352,7 @@ export default function ProjectSuppliersGCK() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
-                        {["Поставщик", "Получено", "Прозвонено", "% прозвона", "Дозвон", "% дозвона", "Лиды", "% конверсии", "Потрачено", "₽/лид", "Ср. длит."].map((h) => (
+                        {["Поставщик", "Контакты", "Прозвонили", "Дозвонились", "% прозвонили", "% дозвонились", "% в лид", "Лиды", "Потрачено", "₽/лид", "Ср. длит."].map((h) => (
                           <th key={h} className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -372,17 +374,17 @@ export default function ProjectSuppliersGCK() {
                           </td>
                           <td className="px-4 py-3">{r.received.toLocaleString()}</td>
                           <td className="px-4 py-3">{r.called.toLocaleString()}</td>
+                          <td className="px-4 py-3">{r.answered.toLocaleString()}</td>
                           <td className="px-4 py-3">
                             <RateBadge value={r.call_rate} thresholds={[30, 70]} />
                           </td>
-                          <td className="px-4 py-3">{r.answered.toLocaleString()}</td>
                           <td className="px-4 py-3">
                             <RateBadge value={r.answer_rate} />
                           </td>
-                          <td className="px-4 py-3 font-semibold">{r.leads}</td>
                           <td className="px-4 py-3">
                             <RateBadge value={r.conversion_rate} thresholds={[5, 15]} />
                           </td>
+                          <td className="px-4 py-3 font-semibold">{r.leads}</td>
                           <td className="px-4 py-3">{r.spent > 0 ? `${r.spent.toLocaleString()} ₽` : "—"}</td>
                           <td className="px-4 py-3 font-semibold">{r.cost_per_lead > 0 ? `${r.cost_per_lead.toLocaleString()} ₽` : "—"}</td>
                           <td className="px-4 py-3 text-muted-foreground">{formatDuration(r.avg_duration)}</td>

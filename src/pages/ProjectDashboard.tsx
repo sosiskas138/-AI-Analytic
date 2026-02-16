@@ -230,8 +230,9 @@ export default function ProjectDashboard() {
         isGck: !!(s as any).is_gck,
         received,
         called,
+        answered: answeredUnique,
         callRate: received > 0 ? +((called / received) * 100).toFixed(1) : 0,
-        answerRate: received > 0 ? +((answeredUnique / received) * 100).toFixed(1) : 0,
+        answerRate: called > 0 ? +((answeredUnique / called) * 100).toFixed(1) : 0,
         convRate: answeredUnique > 0 ? +((lds / answeredUnique) * 100).toFixed(1) : 0,
         leads: lds,
       };
@@ -444,7 +445,7 @@ export default function ProjectDashboard() {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap min-w-[140px]">База</th>
-                    {["Получено", "Прозвонено", "% прозвона", "% конв. в звонок", "% конв. в лид", "Лиды"].map((h) => (
+                    {["Контакты", "Прозвонили", "Дозвонились", "% прозвонили", "% дозвонились", "% в лид", "Лиды"].map((h) => (
                       <th key={h} className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -470,6 +471,7 @@ export default function ProjectDashboard() {
                       </td>
                       <td className="px-4 py-3">{r.received.toLocaleString()}</td>
                       <td className="px-4 py-3">{r.called.toLocaleString()}</td>
+                      <td className="px-4 py-3">{r.answered.toLocaleString()}</td>
                       <td className="px-4 py-3">
                         <RateBadge value={r.callRate} thresholds={[30, 70]} />
                       </td>
@@ -531,8 +533,8 @@ export default function ProjectDashboard() {
                       }}
                       formatter={(value: number, name: string) => [`${value}%`, name]}
                     />
-                    <Bar dataKey="answerRate" name="% конв. в звонок" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="convRate" name="% конв. в лид" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="answerRate" name="% дозвонились" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="convRate" name="% в лид" fill="hsl(var(--chart-4))" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
