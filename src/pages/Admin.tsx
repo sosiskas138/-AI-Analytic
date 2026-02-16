@@ -36,11 +36,6 @@ export default function Admin() {
   const queryClient = useQueryClient();
 
   // ---- Data queries ----
-  // Note: profiles and user_roles are not used in the UI, skipping for now
-  const profiles: any[] = [];
-  const loadingProfiles = false;
-  const userRoles: any[] = [];
-
   const { data: projectsData } = useQuery({
     queryKey: ["projects"],
     queryFn: async () => {
@@ -150,20 +145,25 @@ export default function Admin() {
     enabled: !!projects && projects.length > 0,
   });
 
-  // ---- Fetch user emails (logins) via API ----
-  const { data: authUsersData } = useQuery({
+  // ---- Fetch users via API ----
+  const { data: usersData } = useQuery({
     queryKey: ["auth-users"],
     queryFn: async () => {
       const response = await api.getUsers();
-      return (response.users || []).map((u: any) => ({ id: u.id, email: u.email || u.login }));
+      return (response.users || []).map((u: any) => ({
+        id: u.id,
+        user_id: u.id,
+        email: u.email || u.login || "",
+        full_name: u.full_name || "",
+        role: u.role || "member",
+      }));
     },
   });
-  const authUsers = authUsersData;
+  const users = usersData || [];
 
   const getUserEmail = (userId: string) => {
-    const u = authUsers?.find((a) => a.id === userId);
+    const u = users.find((a) => a.id === userId);
     if (!u) return "—";
-    // Strip @app.local for display
     return u.email?.replace(/@app\.local$/, "") || "—";
   };
 
@@ -202,7 +202,7 @@ export default function Admin() {
   const activeTab = searchParams.get("tab") || "users";
 
   // ---- Helpers ----
-  const getUserRole = (userId: string) => userRoles?.find((r) => r.user_id === userId)?.role || "member";
+  const getUserRole = (userId: string) => users.find((u) => u.id === userId)?.role || "member";
   const getProjectName = (projectId: string) => projects?.find((p) => p.id === projectId)?.name || "—";
 
   const getUserProjects = (userId: string) => {
@@ -538,10 +538,10 @@ export default function Admin() {
 
           {/* All users with inline access */}
           <div className="space-y-4">
-            {(!profiles || profiles.length === 0) ? (
+            {users.length === 0 ? (
               <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">Нет пользователей</div>
             ) : (
-              profiles.map((u) => {
+              users.map((u) => {
                 const role = getUserRole(u.user_id);
                 const userProjects = getUserProjects(u.user_id);
                 const unassigned = getUnassignedProjects(u.user_id);
@@ -741,9 +741,9 @@ export default function Admin() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Не назначен</SelectItem>
-                        {profiles?.map((p) => (
-                          <SelectItem key={p.user_id} value={p.full_name || p.user_id}>
-                            {p.full_name || p.user_id.slice(0, 8)}
+                        {users?.map((p) => (
+                          <SelectItem key={p.id} value={p.full_name || p.id}>
+                            {p.full_name || p.email?.replace(/@app\.local$/, "") || p.id.slice(0, 8)}
                           </SelectItem>
                         ))}
                       </SelectContent>
