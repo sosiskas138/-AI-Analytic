@@ -185,12 +185,14 @@ export default function ProjectDashboard() {
   }, [allNumbers, suppliers, pricing, metrics]);
 
   // ---- Базы (per supplier) ----
+  // Используем сырые номера (без фильтра по дате) для привязки звонков к поставщикам — как на странице «Базы»
+  const rawNumbers = supplierNumbers || [];
   const supplierStats = useMemo(() => {
-    if (!suppliers || !allNumbers || !allCalls) return [];
+    if (!suppliers || !rawNumbers.length || !allCalls) return [];
 
     const phoneToSupplier = new Map<string, string>();
     const supplierPhones = new Map<string, Set<string>>();
-    for (const sn of allNumbers) {
+    for (const sn of rawNumbers) {
       phoneToSupplier.set(sn.phone_normalized, sn.supplier_id);
       if (!supplierPhones.has(sn.supplier_id)) supplierPhones.set(sn.supplier_id, new Set());
       supplierPhones.get(sn.supplier_id)!.add(sn.phone_normalized);
@@ -234,7 +236,7 @@ export default function ProjectDashboard() {
         leads: lds,
       };
     }).sort((a, b) => b.received - a.received);
-  }, [suppliers, allNumbers, allCalls]);
+  }, [suppliers, rawNumbers, allCalls]);
 
   // ---- ГЦК aggregate ----
   const gckStats = useMemo(() => {
