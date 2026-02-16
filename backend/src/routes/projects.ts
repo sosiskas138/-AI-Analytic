@@ -62,11 +62,13 @@ router.get('/stats', authenticate, async (req: AuthRequest, res) => {
     }
 
     // Get all calls stats in one query
+    // unique_calls = уникальные номера (по которым звонили)
+    // answered_calls = уникальные номера со статусом Успешный
     const statsResult = await query(
       `SELECT 
         project_id,
         COUNT(DISTINCT phone_normalized) as unique_calls,
-        COUNT(DISTINCT CASE WHEN duration_seconds > 0 THEN phone_normalized END) as answered_calls,
+        COUNT(DISTINCT CASE WHEN LOWER(TRIM(status)) IN ('успешный','ответ','answered','success') THEN phone_normalized END) as answered_calls,
         COUNT(DISTINCT CASE WHEN is_lead THEN phone_normalized END) as lead_calls
        FROM calls
        WHERE project_id = ANY($1)

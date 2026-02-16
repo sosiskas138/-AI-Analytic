@@ -381,7 +381,7 @@ export default function ProjectDashboard() {
           <KPICard title="Контактов обработано" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
           <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={PhoneCall} delay={0.05} info="Уникальные номера со статусом «Успешный»" />
           <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
-          <KPICard title="% дозвона" value={`${metrics.uniqueCalls > 0 ? (metrics.answered / metrics.uniqueCalls * 100).toFixed(1) : "0"}%`} icon={Signal} delay={0.15} info="Дозвонились / Контактов обработано × 100%" />
+          <KPICard title="% дозвона" value={`${metrics.uniqueCalls > 0 ? (metrics.answered / metrics.uniqueCalls * 100).toFixed(1) : "0"}%`} icon={Signal} delay={0.15} info="Дозвонились (уник.) / Уникальные обработанные × 100%" />
         </div>
 
         {/* Daily trend chart */}
