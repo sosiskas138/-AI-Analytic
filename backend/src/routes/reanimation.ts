@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/project/:projectId/exports', authenticate, requireProjectAccess, async (req, res) => {
   try {
     const result = await query(
-      'SELECT * FROM reanimation_exports WHERE project_id = $1 ORDER BY created_at DESC',
+      'SELECT * FROM reanimation_exports WHERE project_id = $1 ORDER BY exported_at DESC',
       [req.params.projectId]
     );
     res.json({ exports: result.rows });
@@ -77,7 +77,7 @@ router.post('/exports', authenticate, requireAdmin, async (req: AuthRequest, res
 router.get('/exports', authenticate, requireAdmin, async (req, res) => {
   try {
     const result = await query(
-      'SELECT * FROM reanimation_exports ORDER BY created_at DESC LIMIT 50'
+      'SELECT * FROM reanimation_exports ORDER BY exported_at DESC LIMIT 50'
     );
     res.json({ exports: result.rows });
   } catch (error: any) {
