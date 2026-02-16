@@ -113,6 +113,16 @@ export default function ProjectDashboard() {
   // Filter by date range
   const fromTs = dateRange.from?.getTime();
   const toTs = dateRange.to?.getTime();
+  const fromDateStr = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
+  const toDateStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
+
+  // Агрегаты с бэкенда (единственный источник правды — COUNT в БД)
+  const { data: apiStats } = useQuery({
+    queryKey: ["project-dashboard-stats", projectId, fromDateStr, toDateStr],
+    queryFn: async () => api.getProjectDashboardStats(projectId!, { fromDate: fromDateStr, toDate: toDateStr }),
+    enabled: !!projectId,
+    staleTime: 30000,
+  });
 
   const allCalls = useMemo(() => {
     const raw = calls || [];
@@ -378,10 +388,10 @@ export default function ProjectDashboard() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Общее</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-          <KPICard title="Контактов обработано" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
-          <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={PhoneCall} delay={0.05} info="Уникальные номера со статусом «Успешный»" />
-          <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
-          <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Дозвонились (уник.) / Уникальные обработанные × 100%" />
+          <KPICard title="Контактов обработано" value={(apiStats?.uniqueCalls ?? metrics.uniqueCalls).toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
+          <KPICard title="Дозвонились" value={(apiStats?.answered ?? metrics.answered).toLocaleString()} icon={PhoneCall} delay={0.05} info="Уникальные номера со статусом «Успешный»" />
+          <KPICard title="Лиды" value={(apiStats?.leads ?? metrics.leads).toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
+          <KPICard title="% дозвона" value={`${(apiStats?.answerRate ?? metrics.answerRate).toFixed(1)}%`} icon={Signal} delay={0.15} info="Дозвонились (уник.) / Уникальные обработанные × 100%" />
         </div>
 
         {/* Daily trend chart */}

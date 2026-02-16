@@ -100,6 +100,44 @@ router.get('/stats', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// Get single project stats (для дашборда, с опциональной фильтрацией по датам)
+router.get('/:projectId/stats', authenticate, requireProjectAccess, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { fromDate, toDate } = req.query;
+    let whereConditions = ['project_id = $1'];
+    const values: any[] = [projectId];
+    let paramCount = 2;
+    if (fromDate) {
+      whereConditions.push(`call_at >= $${paramCount++}::date`);
+      values.push(fromDate);
+    }
+    if (toDate) {
+      whereConditions.push(`call_at < ($${paramCount++}::date + interval '1 day')`);
+      values.push(toDate);
+    }
+    const whereClause = whereConditions.join(' AND ');
+    const statsResult = await query(
+      `SELECT
+        COUNT(DISTINCT phone_normalized) as unique_calls,
+        COUNT(DISTINCT CASE WHEN LOWER(TRIM(status)) IN ('успешный','ответ','answered','success') THEN phone_normalized END) as answered_calls,
+        COUNT(DISTINCT CASE WHEN is_lead THEN phone_normalized END) as lead_calls
+       FROM calls
+       WHERE ${whereClause}`,
+      values
+    );
+    const row = statsResult.rows[0];
+    const uniqueCalls = parseInt(row.unique_calls) || 0;
+    const answered = parseInt(row.answered_calls) || 0;
+    const leads = parseInt(row.lead_calls) || 0;
+    const answerRate = uniqueCalls > 0 ? ((answered / uniqueCalls) * 100) : 0;
+    res.json({ uniqueCalls, answered, leads, answerRate });
+  } catch (error: any) {
+    console.error('Get project stats error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 // Get project by ID
 router.get('/:projectId', authenticate, requireProjectAccess, async (req, res) => {
   try {

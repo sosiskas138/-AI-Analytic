@@ -154,6 +154,16 @@ class ApiClient {
     return this.request<{ stats: Record<string, { uniqueCalls: number; convCall: string; convLead: string }> }>('/projects/stats');
   }
 
+  async getProjectDashboardStats(projectId: string, params?: { fromDate?: string; toDate?: string }) {
+    const query = new URLSearchParams();
+    if (params?.fromDate) query.append('fromDate', params.fromDate);
+    if (params?.toDate) query.append('toDate', params.toDate);
+    const qs = query.toString();
+    return this.request<{ uniqueCalls: number; answered: number; leads: number; answerRate: number }>(
+      `/projects/${projectId}/stats${qs ? `?${qs}` : ''}`
+    );
+  }
+
   // Calls
   async getCalls(projectId: string, params?: { page?: number; pageSize?: number; status?: string; phone?: string; isGck?: boolean }) {
     const query = new URLSearchParams();
