@@ -885,19 +885,21 @@ export default function Admin() {
             const st = allStatuses?.find((s) => s.project_id === project.id) || ({} as Record<string, any>);
             const calls = allCalls?.filter((c) => c.project_id === project.id) || [];
             const numbers = allNumbers?.filter((n) => n.project_id === project.id) || [];
-            const uniquePhones = new Set(calls.map((c: any) => c.phone_normalized));
-            const uniqueCalls = uniquePhones.size;
+            const calledPhones = new Set(calls.map((c: any) => c.phone_normalized));
+            const uniqueCalls = calledPhones.size;
+            const answeredPhones = new Set<string>();
             const leadPhones = new Set<string>();
             for (const c of calls) {
+              if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
               if (c.is_lead) leadPhones.add(c.phone_normalized);
             }
-            const answered = calls.filter((c) => isStatusSuccessful(c.status)).length;
+            const answered = answeredPhones.size;
             const leads = leadPhones.size;
             const totalCalls = calls.length;
-            const answerRate = totalCalls > 0 ? ((answered / totalCalls) * 100).toFixed(1) : "0";
+            const answerRate = calledPhones.size > 0 ? ((answeredPhones.size / calledPhones.size) * 100).toFixed(1) : "0";
             const uniqueContacts = numbers.filter((n) => !n.is_duplicate_in_project).length;
-            const convCall = totalCalls > 0 ? ((answered / totalCalls) * 100).toFixed(1) : "0";
-            const convLead = answered > 0 ? ((leads / answered) * 100).toFixed(1) : "0";
+            const convCall = calledPhones.size > 0 ? ((answeredPhones.size / calledPhones.size) * 100).toFixed(1) : "0";
+            const convLead = answeredPhones.size > 0 ? ((leads / answeredPhones.size) * 100).toFixed(1) : "0";
 
             // Costs
             const projSuppliers = allSuppliers?.filter((s) => s.project_id === project.id) || [];

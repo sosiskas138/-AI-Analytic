@@ -106,6 +106,7 @@ export default function ProjectSuppliersGCK() {
     // Initialize stats for filtered suppliers
     const bySupplier = new Map<string, {
       calledPhones: Set<string>;
+      answeredPhones: Set<string>;
       leadPhones: Set<string>;
       totalCalls: number;
       answeredCalls: number;
@@ -115,6 +116,7 @@ export default function ProjectSuppliersGCK() {
     for (const s of filteredSuppliers) {
       bySupplier.set(s.id, {
         calledPhones: new Set(),
+        answeredPhones: new Set(),
         leadPhones: new Set(),
         totalCalls: 0,
         answeredCalls: 0,
@@ -141,6 +143,7 @@ export default function ProjectSuppliersGCK() {
 
       if (isStatusSuccessful(c.status)) {
         entry.answeredCalls++;
+        entry.answeredPhones.add(c.phone_normalized);
       }
       if (c.is_lead) {
         entry.leadPhones.add(c.phone_normalized);
@@ -152,13 +155,13 @@ export default function ProjectSuppliersGCK() {
       .map(([supplierId, d]) => {
         const received = supplierPhones.get(supplierId)?.size || 0;
         const called = d.calledPhones.size;
-        const answered = d.answeredCalls;
+        const answered = d.answeredPhones.size;
         const leads = d.leadPhones.size;
         const info = supplierIdToInfo.get(supplierId);
         const ppc = info?.ppc ?? 0;
 
         const callRate = received > 0 ? +((called / received) * 100).toFixed(1) : 0;
-        const answerRate = d.totalCalls > 0 ? +((answered / d.totalCalls) * 100).toFixed(1) : 0;
+        const answerRate = called > 0 ? +((answered / called) * 100).toFixed(1) : 0;
         const conversionRate = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
 

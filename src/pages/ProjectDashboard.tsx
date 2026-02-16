@@ -142,15 +142,17 @@ export default function ProjectDashboard() {
   const metrics = useMemo(() => {
     const totalContacts = allNumbers.length;
     const totalCalls = allCalls.length;
-    const uniquePhones = new Set(allCalls.map((c: any) => c.phone_normalized));
-    const uniqueCalls = uniquePhones.size;
+    const calledPhones = new Set(allCalls.map((c: any) => c.phone_normalized));
+    const uniqueCalls = calledPhones.size;
+    const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of allCalls) {
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
-    const answered = allCalls.filter((c: any) => isStatusSuccessful(c.status)).length;
+    const answered = answeredPhones.size;
     const leads = leadPhones.size;
-    const answerRate = totalCalls > 0 ? ((answered / totalCalls) * 100) : 0;
+    const answerRate = uniqueCalls > 0 ? ((answeredPhones.size / uniqueCalls) * 100) : 0;
     const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
     return { totalContacts, totalCalls, uniqueCalls, answered, answerRate, leads, totalMinutes };
   }, [allCalls, allNumbers]);
@@ -194,9 +196,14 @@ export default function ProjectDashboard() {
       supplierPhones.get(sn.supplier_id)!.add(sn.phone_normalized);
     }
 
-    const bySupplier = new Map<string, { calledPhones: Set<string>; totalCalls: number; answeredCalls: number; leadPhones: Set<string> }>();
+    const bySupplier = new Map<string, {
+      calledPhones: Set<string>;
+      answeredPhones: Set<string>;
+      totalCalls: number;
+      leadPhones: Set<string>;
+    }>();
     for (const s of suppliers) {
-      bySupplier.set(s.id, { calledPhones: new Set(), totalCalls: 0, answeredCalls: 0, leadPhones: new Set() });
+      bySupplier.set(s.id, { calledPhones: new Set(), answeredPhones: new Set(), totalCalls: 0, leadPhones: new Set() });
     }
 
     for (const c of allCalls) {
@@ -206,7 +213,7 @@ export default function ProjectDashboard() {
       if (!entry) continue;
       entry.calledPhones.add(c.phone_normalized);
       entry.totalCalls++;
-      if (isStatusSuccessful(c.status)) entry.answeredCalls++;
+      if (isStatusSuccessful(c.status)) entry.answeredPhones.add(c.phone_normalized);
       if (c.is_lead) entry.leadPhones.add(c.phone_normalized);
     }
 
@@ -214,8 +221,7 @@ export default function ProjectDashboard() {
       const received = supplierPhones.get(s.id)?.size || 0;
       const d = bySupplier.get(s.id)!;
       const called = d.calledPhones.size;
-      const totalCalls = d.totalCalls;
-      const ans = d.answeredCalls;
+      const answeredUnique = d.answeredPhones.size;
       const lds = d.leadPhones.size;
       return {
         name: s.name || s.tag || "—",
@@ -223,8 +229,8 @@ export default function ProjectDashboard() {
         received,
         called,
         callRate: received > 0 ? +((called / received) * 100).toFixed(1) : 0,
-        answerRate: totalCalls > 0 ? +((ans / totalCalls) * 100).toFixed(1) : 0,
-        convRate: ans > 0 ? +((lds / ans) * 100).toFixed(1) : 0,
+        answerRate: called > 0 ? +((answeredUnique / called) * 100).toFixed(1) : 0,
+        convRate: answeredUnique > 0 ? +((lds / answeredUnique) * 100).toFixed(1) : 0,
         leads: lds,
       };
     }).sort((a, b) => b.received - a.received);
@@ -253,21 +259,22 @@ export default function ProjectDashboard() {
     
     const receivedPhones = new Set(gckNumbers.map((n: any) => n.phone_normalized));
     const calledPhones = new Set(gckCalls.map((c: any) => c.phone_normalized));
+    const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of gckCalls) {
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
     const received = receivedPhones.size;
     const called = calledPhones.size;
-    const totalGckCalls = gckCalls.length;
-    const ans = gckCalls.filter((c: any) => isStatusSuccessful(c.status)).length;
+    const ansUnique = answeredPhones.size;
     const lds = leadPhones.size;
     return {
       received,
       called,
       callRate: received > 0 ? +((called / received) * 100).toFixed(1) : 0,
-      answerRate: totalGckCalls > 0 ? +((ans / totalGckCalls) * 100).toFixed(1) : 0,
-      convRate: ans > 0 ? +((lds / ans) * 100).toFixed(1) : 0,
+      answerRate: called > 0 ? +((ansUnique / called) * 100).toFixed(1) : 0,
+      convRate: ansUnique > 0 ? +((lds / ansUnique) * 100).toFixed(1) : 0,
       leads: lds,
     };
   }, [hasGck, suppliers, allNumbers, allCalls]);
@@ -275,23 +282,23 @@ export default function ProjectDashboard() {
   // ---- Daily trend data ----
   const dailyData = useMemo(() => {
     if (!allCalls.length) return [];
-    const byDay = new Map<string, { totalCalls: number; answeredCalls: number; leadPhones: Set<string> }>();
+    const byDay = new Map<string, { calledPhones: Set<string>; answeredPhones: Set<string>; leadPhones: Set<string> }>();
     for (const c of allCalls) {
       const day = c.call_at?.slice(0, 10);
       if (!day) continue;
-      if (!byDay.has(day)) byDay.set(day, { totalCalls: 0, answeredCalls: 0, leadPhones: new Set() });
+      if (!byDay.has(day)) byDay.set(day, { calledPhones: new Set(), answeredPhones: new Set(), leadPhones: new Set() });
       const e = byDay.get(day)!;
-      e.totalCalls++;
-      if (isStatusSuccessful(c.status)) e.answeredCalls++;
+      e.calledPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) e.answeredPhones.add(c.phone_normalized);
       if (c.is_lead) e.leadPhones.add(c.phone_normalized);
     }
     return [...byDay.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([day, d]) => ({
         date: format(new Date(day), "dd.MM", { locale: ru }),
-        calls: d.totalCalls,
+        calls: d.calledPhones.size,
         leads: d.leadPhones.size,
-        answerRate: d.totalCalls > 0 ? +((d.answeredCalls / d.totalCalls) * 100).toFixed(1) : 0,
+        answerRate: d.calledPhones.size > 0 ? +((d.answeredPhones.size / d.calledPhones.size) * 100).toFixed(1) : 0,
       }));
   }, [allCalls]);
 
@@ -364,9 +371,9 @@ export default function ProjectDashboard() {
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Общее</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <KPICard title="Контактов обработано" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
-          <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={PhoneCall} delay={0.05} info="Количество звонков со статусом «Успешный»" />
+          <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={PhoneCall} delay={0.05} info="Уникальные номера со статусом «Успешный»" />
           <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
-          <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Доля отвеченных от контактов" />
+          <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Номера со статусом «Успешный» / Прозвонено × 100%" />
         </div>
 
         {/* Daily trend chart */}

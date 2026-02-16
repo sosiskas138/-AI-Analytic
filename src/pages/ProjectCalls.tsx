@@ -141,16 +141,18 @@ export default function ProjectCalls() {
   // Metrics for filtered data
   const metrics = useMemo(() => {
     const total = filtered.length;
-    const uniquePhones = new Set(filtered.map((c) => c.phone_normalized));
+    const calledPhones = new Set(filtered.map((c) => c.phone_normalized));
+    const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of filtered) {
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
-    const answered = filtered.filter((c) => isStatusSuccessful(c.status)).length;
+    const answered = answeredPhones.size;
     const leads = leadPhones.size;
-    const answerRate = total > 0 ? (answered / total) * 100 : 0;
+    const answerRate = calledPhones.size > 0 ? (answeredPhones.size / calledPhones.size) * 100 : 0;
     const avgDuration = total > 0 ? filtered.reduce((s, c) => s + c.duration_seconds, 0) / total : 0;
-    return { total, uniquePhones: uniquePhones.size, answered, answerRate, leads, avgDuration };
+    return { total, uniquePhones: calledPhones.size, answered, answerRate, leads, avgDuration };
   }, [filtered]);
 
   const hasActiveFilters = statusFilter !== "all" || leadFilter !== "all" || callListFilter !== "all" || dateRange.from || dateRange.to;
@@ -282,9 +284,9 @@ export default function ProjectCalls() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-5">
         <KPICard title="Все звонки" value={metrics.total.toLocaleString()} icon={PhoneCall} delay={0} info="Общее число звонков по выбранным фильтрам" />
         <KPICard title="Уникальные" value={metrics.uniquePhones.toLocaleString()} icon={Phone} delay={0.05} info="Количество уникальных номеров (без повторных попыток)" />
-        <KPICard title="Дозвон" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.1} info="Доля звонков со статусом «Успешный» от общего числа" />
-        <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={CheckCircle2} delay={0.15} info="Кол-во звонков со статусом «Успешный»" />
-        <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.2} info="Кол-во звонков, отмеченных как лид" />
+        <KPICard title="Дозвон" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.1} info="Номера со статусом «Успешный» / Прозвонено × 100%" />
+        <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={CheckCircle2} delay={0.15} info="Уникальные номера со статусом «Успешный»" />
+        <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.2} info="Уникальные номера, отмеченные как лид" />
         <KPICard title="Ср. длительность" value={formatDuration(Math.round(metrics.avgDuration))} icon={Clock} delay={0.25} info="Средняя длительность всех звонков по фильтру" />
       </div>
 

@@ -138,13 +138,20 @@ export default function AdminProjectStatuses() {
     const numbers = allNumbers?.filter((n) => n.project_id === projectId) || [];
     const uniqueContacts = numbers.filter((n) => !n.is_duplicate_in_project).length;
     const totalCalls = calls.length;
-    const leads = calls.filter((c) => c.is_lead).length;
-    const answered = calls.filter((c) => isStatusSuccessful(c.status)).length;
-    const answerRate = totalCalls > 0 ? ((answered / totalCalls) * 100).toFixed(1) : "0";
+    const calledPhones = new Set(calls.map((c) => c.phone_normalized));
+    const answeredPhones = new Set<string>();
+    const leadPhones = new Set<string>();
+    for (const c of calls) {
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
+      if (c.is_lead) leadPhones.add(c.phone_normalized);
+    }
+    const answered = answeredPhones.size;
+    const leads = leadPhones.size;
+    const answerRate = calledPhones.size > 0 ? ((answered / calledPhones.size) * 100).toFixed(1) : "0";
     const minutes = calls.reduce((s, c) => s + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
 
-    // Конверсия в звонок (успешный): дозвонились / контакты
-    const convCall = uniqueContacts > 0 ? ((answered / uniqueContacts) * 100).toFixed(1) : "0";
+    // Конверсия в звонок (успешный): дозвонились / прозвонено
+    const convCall = calledPhones.size > 0 ? ((answered / calledPhones.size) * 100).toFixed(1) : "0";
     // Конверсия в лид: лиды / дозвонились
     const convLead = answered > 0 ? ((leads / answered) * 100).toFixed(1) : "0";
 

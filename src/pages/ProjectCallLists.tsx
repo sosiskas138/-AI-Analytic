@@ -54,6 +54,7 @@ export default function ProjectSuppliers() {
     // Group calls by call_list
     const byList = new Map<string, {
       calledPhones: Set<string>;
+      answeredPhones: Set<string>;
       leadPhones: Set<string>;
       totalCalls: number;
       answeredCalls: number;
@@ -70,6 +71,7 @@ export default function ProjectSuppliers() {
       if (!byList.has(listName)) {
         byList.set(listName, {
           calledPhones: new Set(),
+          answeredPhones: new Set(),
           leadPhones: new Set(),
           totalCalls: 0,
           answeredCalls: 0,
@@ -83,6 +85,7 @@ export default function ProjectSuppliers() {
 
       if (isStatusSuccessful(c.status)) {
         entry.answeredCalls++;
+        entry.answeredPhones.add(c.phone_normalized);
       }
 
       if (c.is_lead) {
@@ -96,10 +99,10 @@ export default function ProjectSuppliers() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([listName, d]) => {
         const received = d.calledPhones.size;
-        const answered = d.answeredCalls;
+        const answered = d.answeredPhones.size;
         const leads = d.leadPhones.size;
 
-        const answerRate = d.totalCalls > 0 ? +((answered / d.totalCalls) * 100).toFixed(1) : 0;
+        const answerRate = received > 0 ? +((answered / received) * 100).toFixed(1) : 0;
         const conversionRate = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
 
@@ -121,18 +124,29 @@ export default function ProjectSuppliers() {
       });
   }, [calls, dateRange, pricing]);
 
-  // Totals
+  // Totals (from raw calls to avoid double-counting phones across lists)
   const totals = useMemo(() => {
-    if (report.length === 0) return null;
+    const allCalls = calls || [];
+    if (allCalls.length === 0) return null;
 
-    let received = 0, answered = 0, leads = 0, totalCalls = 0, totalSpent = 0;
-    for (const r of report) {
-      received += r.received;
-      answered += r.answered;
-      leads += r.leads;
-      totalCalls += r.total_calls;
-      totalSpent += r.spent;
+    const ppc = (pricing as any)?.price_per_contact ?? 0;
+    const calledPhones = new Set<string>();
+    const answeredPhones = new Set<string>();
+    const leadPhones = new Set<string>();
+    let totalCalls = 0;
+    for (const c of allCalls) {
+      const date = c.call_at?.slice(0, 10);
+      if (dateRange.from && date && date < format(dateRange.from, "yyyy-MM-dd")) continue;
+      if (dateRange.to && date && date > format(dateRange.to, "yyyy-MM-dd")) continue;
+      totalCalls++;
+      calledPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
+      if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
+    const received = calledPhones.size;
+    const answered = answeredPhones.size;
+    const leads = leadPhones.size;
+    const spent = report.reduce((s, r) => s + r.spent, 0);
 
     return {
       received,
@@ -141,10 +155,10 @@ export default function ProjectSuppliers() {
       answer_rate: received > 0 ? +((answered / received) * 100).toFixed(1) : 0,
       conversion_rate: answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0,
       total_calls: totalCalls,
-      spent: totalSpent,
-      cost_per_lead: leads > 0 ? Math.round(totalSpent / leads) : 0,
+      spent,
+      cost_per_lead: leads > 0 ? Math.round(spent / leads) : 0,
     };
-  }, [report]);
+  }, [calls, report, dateRange, pricing]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);
@@ -215,7 +229,7 @@ export default function ProjectSuppliers() {
       {totals && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <KPICard title="Получено номеров" value={totals.received.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров, по которым были звонки" />
-          <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.05} info="Номера со статусом «Успешный»" />
+          <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.05} info="Номера со статусом «Успешный» / Прозвонено × 100%" />
           <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.1} info="Уникальные номера, отмеченные как лид" />
           <KPICard title="Конверсия в лид" value={`${totals.conversion_rate}%`} icon={TrendingUp} delay={0.15} info="Лиды / Дозвонились × 100%" />
           <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.2} info="Получено номеров × Стоимость контакта (ГЦК)" />
