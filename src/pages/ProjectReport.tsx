@@ -14,6 +14,7 @@ import * as XLSX from "xlsx";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { isStatusSuccessful } from "@/lib/utils";
 
 interface ReportRow {
   phone: string;
@@ -135,7 +136,7 @@ export default function ProjectReport() {
       }
       const entry = callsByDay.get(day)!;
       entry.uniquePhones.add(c.phone_normalized);
-      if (c.duration_seconds > 0) entry.answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) entry.answeredPhones.add(c.phone_normalized);
       if (c.is_lead) entry.leadPhones.add(c.phone_normalized);
     }
 
@@ -286,7 +287,7 @@ export default function ProjectReport() {
               {(() => {
                 const totContacts = dailyData.reduce((s, d) => s + d.contacts, 0);
                 const totAnswered = filteredCalls
-                  ? new Set(filteredCalls.filter((c: any) => c.duration_seconds > 0 && receivedPhonesSet.has(c.phone_normalized)).map((c: any) => c.phone_normalized)).size
+                  ? new Set(filteredCalls.filter((c: any) => isStatusSuccessful(c.status) && receivedPhonesSet.has(c.phone_normalized)).map((c: any) => c.phone_normalized)).size
                   : 0;
                 const totLeads = filteredCalls
                   ? new Set(filteredCalls.filter((c: any) => c.is_lead && receivedPhonesSet.has(c.phone_normalized)).map((c: any) => c.phone_normalized)).size

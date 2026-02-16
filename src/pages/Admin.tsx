@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ALL_TABS, TabKey } from "@/hooks/useProjectAccess";
 import { toast } from "sonner";
 import { useState } from "react";
+import { isStatusSuccessful } from "@/lib/utils";
 
 /** Фильтрует ввод, оставляя только цифры и одну десятичную точку */
 function filterNumericInput(value: string): string {
@@ -889,7 +890,7 @@ export default function Admin() {
             const answeredPhones = new Set<string>();
             const leadPhones = new Set<string>();
             for (const c of calls) {
-              if (c.duration_seconds > 0) answeredPhones.add(c.phone_normalized);
+              if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
               if (c.is_lead) leadPhones.add(c.phone_normalized);
             }
             const answered = answeredPhones.size;

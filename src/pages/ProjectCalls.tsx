@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, isStatusSuccessful } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -144,7 +144,7 @@ export default function ProjectCalls() {
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of filtered) {
-      if (c.duration_seconds > 0) answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
     const answered = answeredPhones.size;

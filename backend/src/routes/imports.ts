@@ -22,4 +22,36 @@ router.get('/project/:projectId', authenticate, requireProjectAccess, async (req
   }
 });
 
+// Delete import job
+router.delete('/:importId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { importId } = req.params;
+    const check = await query(
+      'SELECT project_id FROM import_jobs WHERE id = $1',
+      [importId]
+    );
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Import not found' });
+    }
+    const projectId = check.rows[0].project_id;
+
+    // Check access
+    if (!req.user!.isAdmin) {
+      const access = await query(
+        'SELECT 1 FROM project_members WHERE user_id = $1 AND project_id = $2',
+        [req.user!.userId, projectId]
+      );
+      if (access.rows.length === 0) {
+        return res.status(403).json({ error: 'Forbidden: No access to this project' });
+      }
+    }
+
+    await query('DELETE FROM import_jobs WHERE id = $1', [importId]);
+    res.json({ message: 'Import deleted' });
+  } catch (error: any) {
+    console.error('Delete import error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 export default router;

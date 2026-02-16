@@ -212,6 +212,10 @@ class ApiClient {
     return this.request<{ imports: any[] }>(`/imports/project/${projectId}`);
   }
 
+  async deleteImport(importId: string) {
+    return this.request(`/imports/${importId}`, { method: 'DELETE' });
+  }
+
   async importCsv(data: {
     project_id: string;
     type: 'suppliers' | 'calls';

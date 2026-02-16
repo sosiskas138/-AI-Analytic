@@ -67,6 +67,15 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
     let errors = 0;
     const totalRows = rows.length;
 
+    // Create import job first so we can link data to it (for delete cascade)
+    const jobResult = await query(
+      `INSERT INTO import_jobs (project_id, type, filename, total_rows, inserted_rows, skipped_duplicates, error_rows, uploaded_by)
+       VALUES ($1, $2, $3, $4, 0, 0, 0, $5)
+       RETURNING id`,
+      [project_id, is_gck ? 'gck' : type, filename || '', totalRows, req.user!.userId]
+    );
+    const importJobId = jobResult.rows[0].id;
+
     if (type === 'suppliers') {
       if (!supplier_id) {
         return res.status(400).json({ error: 'supplier_id is required' });
@@ -115,6 +124,7 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
           phone_raw: phone,
           phone_normalized: normalized,
           is_duplicate_in_project: isDup,
+          import_job_id: importJobId,
           ...(row.received_at ? { received_at: parseReceivedDate(row.received_at) } : {}),
         });
         existingPhones.add(normalized);
@@ -124,23 +134,23 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
       for (let i = 0; i < numbersToInsert.length; i += 500) {
         const batch = numbersToInsert.slice(i, i + 500);
         const values = batch.map((item, idx) => {
-          const base = idx * 6;
-          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
+          const base = idx * 7;
+          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
         }).join(', ');
 
         const params: any[] = [];
         batch.forEach(item => {
-          params.push(item.project_id, item.supplier_id, item.phone_raw, item.phone_normalized, item.is_duplicate_in_project, item.received_at || null);
+          params.push(item.project_id, item.supplier_id, item.phone_raw, item.phone_normalized, item.is_duplicate_in_project, item.received_at || null, item.import_job_id);
         });
 
         try {
-          await query(
-            `INSERT INTO supplier_numbers (project_id, supplier_id, phone_raw, phone_normalized, is_duplicate_in_project, received_at)
+          const insResult = await query(
+            `INSERT INTO supplier_numbers (project_id, supplier_id, phone_raw, phone_normalized, is_duplicate_in_project, received_at, import_job_id)
              VALUES ${values}
              ON CONFLICT (project_id, supplier_id, phone_normalized) DO NOTHING`,
             params
           );
-          inserted += batch.length;
+          inserted += insResult.rowCount ?? batch.length;
         } catch (err) {
           console.error('Batch insert error:', err);
           errors += batch.length;
@@ -179,6 +189,7 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
           call_attempt_number: parseInt(row.call_attempt_number || '1') || 1,
           is_first_attempt: (parseInt(row.call_attempt_number || '1') || 1) === 1,
           is_lead: row.is_lead === 'true' || row.is_lead === '1' || row.is_lead === 'Да' || row.is_lead === 'да',
+          import_job_id: importJobId,
         });
       }
 
@@ -186,8 +197,8 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
       for (let i = 0; i < callsToInsert.length; i += 500) {
         const batch = callsToInsert.slice(i, i + 500);
         const values = batch.map((item, idx) => {
-          const base = idx * 13;
-          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13})`;
+          const base = idx * 14;
+          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14})`;
         }).join(', ');
 
         const params: any[] = [];
@@ -195,13 +206,14 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
           params.push(
             item.project_id, item.external_call_id, item.phone_raw, item.phone_normalized,
             item.call_list, item.skill_base, item.call_at, item.duration_seconds,
-            item.status, item.end_reason, item.is_lead, item.call_attempt_number, item.is_first_attempt
+            item.status, item.end_reason, item.is_lead, item.call_attempt_number, item.is_first_attempt,
+            item.import_job_id
           );
         });
 
         try {
           const insertResult = await query(
-            `INSERT INTO calls (project_id, external_call_id, phone_raw, phone_normalized, call_list, skill_base, call_at, duration_seconds, status, end_reason, is_lead, call_attempt_number, is_first_attempt)
+            `INSERT INTO calls (project_id, external_call_id, phone_raw, phone_normalized, call_list, skill_base, call_at, duration_seconds, status, end_reason, is_lead, call_attempt_number, is_first_attempt, import_job_id)
              VALUES ${values}
              ON CONFLICT (project_id, external_call_id) DO NOTHING
              RETURNING id`,
@@ -216,20 +228,10 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
       }
     }
 
-    // Log import job
+    // Update import job with final counts
     await query(
-      `INSERT INTO import_jobs (project_id, type, filename, total_rows, inserted_rows, skipped_duplicates, error_rows, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        project_id,
-        is_gck ? 'gck' : type,
-        filename || '',
-        totalRows,
-        inserted,
-        skipped,
-        errors,
-        req.user!.userId,
-      ]
+      `UPDATE import_jobs SET inserted_rows = $1, skipped_duplicates = $2, error_rows = $3 WHERE id = $4`,
+      [inserted, skipped, errors, importJobId]
     );
 
     // If is_gck flag is set, mark the supplier as GCK

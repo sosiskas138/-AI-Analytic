@@ -6,6 +6,7 @@ import { Loader2, CheckCircle2, Circle, ExternalLink, ArrowLeft } from "lucide-r
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { isStatusSuccessful } from "@/lib/utils";
 
 const CHECKBOXES = [
   { key: "materials_requested", label: "Материалы" },
@@ -138,7 +139,7 @@ export default function AdminProjectStatuses() {
     const uniqueContacts = numbers.filter((n) => !n.is_duplicate_in_project).length;
     const totalCalls = calls.length;
     const leads = calls.filter((c) => c.is_lead).length;
-    const answered = calls.filter((c) => c.duration_seconds > 0).length;
+    const answered = calls.filter((c) => isStatusSuccessful(c.status)).length;
     const answerRate = totalCalls > 0 ? ((answered / totalCalls) * 100).toFixed(1) : "0";
     const minutes = calls.reduce((s, c) => s + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
 

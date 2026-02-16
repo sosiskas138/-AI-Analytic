@@ -14,6 +14,7 @@ import { ru } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { isStatusSuccessful } from "@/lib/utils";
 
 export default function ProjectSuppliers() {
   const { projectId } = useParams();
@@ -82,7 +83,7 @@ export default function ProjectSuppliers() {
       entry.totalCalls++;
       entry.calledPhones.add(c.phone_normalized);
 
-      const isAnswered = c.duration_seconds > 0;
+      const isAnswered = isStatusSuccessful(c.status);
       if (isAnswered) {
         entry.answeredCalls++;
         entry.answeredPhones.add(c.phone_normalized);
@@ -218,7 +219,7 @@ export default function ProjectSuppliers() {
       {totals && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <KPICard title="Получено номеров" value={totals.received.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров, по которым были звонки" />
-          <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.05} info="Номера с длительностью звонка > 0 сек" />
+          <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.05} info="Номера со статусом «Успешный»" />
           <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.1} info="Уникальные номера, отмеченные как лид" />
           <KPICard title="Конверсия в лид" value={`${totals.conversion_rate}%`} icon={TrendingUp} delay={0.15} info="Лиды / Дозвонились × 100%" />
           <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.2} info="Получено номеров × Стоимость контакта (ГЦК)" />

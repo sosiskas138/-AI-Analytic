@@ -17,6 +17,7 @@ import { ru } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { isStatusSuccessful } from "@/lib/utils";
 
 export default function ProjectSuppliersGCK() {
   const { projectId } = useParams();
@@ -140,7 +141,7 @@ export default function ProjectSuppliersGCK() {
       entry.totalCalls++;
       entry.calledPhones.add(c.phone_normalized);
 
-      if (c.duration_seconds > 0) {
+      if (isStatusSuccessful(c.status)) {
         entry.answeredCalls++;
         entry.answeredPhones.add(c.phone_normalized);
       }
@@ -287,7 +288,7 @@ export default function ProjectSuppliersGCK() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
               <KPICard title="Получено номеров" value={totals.received.toLocaleString()} icon={Users} delay={0} info="Общее количество номеров, загруженных от поставщиков" />
               <KPICard title="Прозвонено" value={`${totals.called.toLocaleString()} (${totals.call_rate}%)`} icon={Phone} delay={0.05} info="Уникальные номера, по которым был хотя бы один звонок" />
-              <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.1} info="Номера с длительностью звонка > 0 сек / Прозвонено × 100%" />
+              <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.1} info="Номера со статусом «Успешный» / Прозвонено × 100%" />
               <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.15} info="Уникальные номера, отмеченные как лид" />
               <KPICard title="Конверсия в лид" value={`${totals.conversion_rate}%`} icon={TrendingUp} delay={0.2} info="Лиды / Дозвонились × 100%" />
               <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.25} info="Получено номеров × Стоимость контакта" />

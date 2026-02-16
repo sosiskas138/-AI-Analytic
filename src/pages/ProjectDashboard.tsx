@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, isStatusSuccessful } from "@/lib/utils";
 import { motion } from "framer-motion";
 
 type DateRange = { from: Date | undefined; to: Date | undefined };
@@ -147,7 +147,7 @@ export default function ProjectDashboard() {
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of allCalls) {
-      if (c.duration_seconds > 0) answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
     const answered = answeredPhones.size;
@@ -190,7 +190,7 @@ export default function ProjectDashboard() {
       const entry = bySupplier.get(sid);
       if (!entry) continue;
       entry.calledPhones.add(c.phone_normalized);
-      if (c.duration_seconds > 0) entry.answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) entry.answeredPhones.add(c.phone_normalized);
       if (c.is_lead) entry.leadPhones.add(c.phone_normalized);
     }
 
@@ -239,7 +239,7 @@ export default function ProjectDashboard() {
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of gckCalls) {
-      if (c.duration_seconds > 0) answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
     const received = receivedPhones.size;
@@ -266,7 +266,7 @@ export default function ProjectDashboard() {
       if (!byDay.has(day)) byDay.set(day, { uniquePhones: new Set(), answeredPhones: new Set(), leadPhones: new Set() });
       const e = byDay.get(day)!;
       e.uniquePhones.add(c.phone_normalized);
-      if (c.duration_seconds > 0) e.answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) e.answeredPhones.add(c.phone_normalized);
       if (c.is_lead) e.leadPhones.add(c.phone_normalized);
     }
     return [...byDay.entries()]
@@ -346,10 +346,30 @@ export default function ProjectDashboard() {
       {/* ===== ОБЩЕЕ ===== */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Общее</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-          <KPICard title="Уникальные звонки" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров телефонов в звонках" />
-          <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.05} info="Количество звонков, отмеченных как лид" />
-          <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.1} info="Доля отвеченных звонков от уникальных звонков" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <KPICard title="Контактов обработано" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.05 }}
+            className="glass-card rounded-xl p-5 kpi-glow hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center gap-1 mb-3">
+              <span className="text-sm font-medium text-muted-foreground">Дозвонились</span>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground">Количество</span>
+                <span className="text-xl font-bold">{metrics.answered.toLocaleString()}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground">Успешный</span>
+                <span className="text-xl font-bold text-success">{metrics.leads.toLocaleString()}</span>
+              </div>
+            </div>
+          </motion.div>
+          <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" />
+          <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Доля отвеченных от контактов" />
         </div>
 
         {/* Daily trend chart */}
@@ -374,7 +394,7 @@ export default function ProjectDashboard() {
                     return [value.toLocaleString(), name];
                   }}
                 />
-                <Bar yAxisId="left" dataKey="calls" name="Уник. звонки" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" dataKey="calls" name="Контактов" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
                 <Bar yAxisId="left" dataKey="leads" name="Лиды" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
                 <Line yAxisId="right" type="monotone" dataKey="answerRate" name="% дозвона" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ r: 2 }} />
               </ComposedChart>

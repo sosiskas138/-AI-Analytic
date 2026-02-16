@@ -2,7 +2,7 @@ import { useParams } from "react-router-dom";
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  FileUp, Upload, CheckCircle2, Loader2, AlertCircle, X, ArrowRight,
+  FileUp, Upload, CheckCircle2, Loader2, AlertCircle, X, ArrowRight, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +72,7 @@ export default function ProjectImports() {
     open: false, type: "suppliers", filename: "", headers: [], rows: [],
   });
   const [importing, setImporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
 
   const { data: suppliers } = useQuery({
@@ -251,6 +252,20 @@ export default function ProjectImports() {
       toast.error(err.message || "Ошибка импорта");
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleDeleteImport = async (importId: string) => {
+    if (!confirm("Удалить запись об импорте? Данные (звонки/номера) при этом не удаляются.")) return;
+    setDeletingId(importId);
+    try {
+      await api.deleteImport(importId);
+      toast.success("Импорт удалён из истории");
+      queryClient.invalidateQueries({ queryKey: ["imports", projectId] });
+    } catch (err: any) {
+      toast.error(err.message || "Ошибка при удалении");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -486,7 +501,7 @@ export default function ProjectImports() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  {["Файл", "Тип", "Всего строк", "Добавлено", "Пропущено", "Ошибки", "Дата"].map((h) => (
+                  {["Файл", "Тип", "Всего строк", "Добавлено", "Пропущено", "Ошибки", "Дата", ""].map((h) => (
                     <th key={h} className="text-left px-4 py-3 font-medium text-muted-foreground">{h}</th>
                   ))}
                 </tr>
@@ -515,6 +530,17 @@ export default function ProjectImports() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {new Date(imp.created_at).toLocaleDateString("ru-RU")}
+                    </td>
+                    <td className="px-4 py-3 w-10">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteImport(imp.id)}
+                        disabled={deletingId === imp.id}
+                      >
+                        {deletingId === imp.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </Button>
                     </td>
                   </tr>
                 ))}
