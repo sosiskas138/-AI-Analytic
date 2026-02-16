@@ -139,20 +139,25 @@ export default function ProjectDashboard() {
   const hasGck = !!(project as any)?.has_gck;
 
   // ---- Общие метрики ----
+  // Контактов обработано = уникальные номера, по которым звонили (calledPhones)
+  // % дозвона = Дозвонились / Контактов обработано
   const metrics = useMemo(() => {
     const totalContacts = allNumbers.length;
     const totalCalls = allCalls.length;
-    const calledPhones = new Set(allCalls.map((c: any) => c.phone_normalized));
-    const uniqueCalls = calledPhones.size;
+    const calledPhones = new Set<string>();
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     for (const c of allCalls) {
-      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
-      if (c.is_lead) leadPhones.add(c.phone_normalized);
+      const phone = c.phone_normalized;
+      if (!phone) continue;
+      calledPhones.add(phone);
+      if (isStatusSuccessful(c.status)) answeredPhones.add(phone);
+      if (c.is_lead) leadPhones.add(phone);
     }
-    const answered = answeredPhones.size;
+    const uniqueCalls = calledPhones.size; // контактов обработано
+    const answered = answeredPhones.size;  // дозвонились
     const leads = leadPhones.size;
-    const answerRate = uniqueCalls > 0 ? ((answeredPhones.size / uniqueCalls) * 100) : 0;
+    const answerRate = uniqueCalls > 0 ? (answered / uniqueCalls) * 100 : 0;
     const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
     return { totalContacts, totalCalls, uniqueCalls, answered, answerRate, leads, totalMinutes };
   }, [allCalls, allNumbers]);
@@ -376,7 +381,7 @@ export default function ProjectDashboard() {
           <KPICard title="Контактов обработано" value={metrics.uniqueCalls.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров в звонках" />
           <KPICard title="Дозвонились" value={metrics.answered.toLocaleString()} icon={PhoneCall} delay={0.05} info="Уникальные номера со статусом «Успешный»" />
           <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Users} delay={0.1} info="Количество звонков, отмеченных как лид" valueClassName="text-success" />
-          <KPICard title="% дозвона" value={`${(metrics.uniqueCalls > 0 ? (metrics.answered / metrics.uniqueCalls) * 100 : 0).toFixed(1)}%`} icon={Signal} delay={0.15} info="Дозвонились / Контактов обработано × 100%" />
+          <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Дозвонились / Контактов обработано × 100%" />
         </div>
 
         {/* Daily trend chart */}
