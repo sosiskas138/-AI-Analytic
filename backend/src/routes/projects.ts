@@ -4,7 +4,19 @@ import { authenticate, requireAdmin, requireProjectAccess, AuthRequest } from '.
 
 const router = express.Router();
 
-const ALLOWED_STATUS_KEYS = ['responsible'] as const;
+const ALLOWED_STATUS_KEYS = [
+  'responsible',
+  'is_active',
+  'analysis_link',
+  'company_name',
+  'company_activity',
+  'materials_requested',
+  'materials_sent',
+  'skillbase_ready',
+  'test_launched',
+  'launched_to_production',
+  'comment',
+] as const;
 
 // Get all projects
 router.get('/', authenticate, async (req: AuthRequest, res) => {
