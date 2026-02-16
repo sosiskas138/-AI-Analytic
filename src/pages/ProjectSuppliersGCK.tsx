@@ -192,13 +192,14 @@ export default function ProjectSuppliersGCK() {
     const supplierPhones = new Map<string, Set<string>>();
     const filteredSuppliers = selectedSupplier === "all" ? suppliers : suppliers.filter((s) => s.id === selectedSupplier);
     for (const s of filteredSuppliers) supplierPhones.set(s.id, new Set());
+    const uniqueReceivedPhones = new Set<string>();
     for (const sn of supplierNumbers) {
       if (!supplierPhones.has(sn.supplier_id)) continue;
       phoneToSupplierId.set(sn.phone_normalized, sn.supplier_id);
       supplierPhones.get(sn.supplier_id)!.add(sn.phone_normalized);
+      uniqueReceivedPhones.add(sn.phone_normalized);
     }
-    let totalReceived = 0;
-    for (const [, set] of supplierPhones) totalReceived += set.size;
+    const totalReceived = uniqueReceivedPhones.size;
     const calledPhones = new Set<string>();
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();

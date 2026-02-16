@@ -149,10 +149,11 @@ export default function ProjectDashboard() {
   const hasGck = !!(project as any)?.has_gck;
 
   // ---- Общие метрики ----
+  // Контактов в базе = уникальные номера в supplier_numbers (по CALCULATION_AUDIT)
   // Контактов обработано = уникальные номера, по которым звонили (calledPhones)
   // % дозвона = Дозвонились / Контактов обработано
   const metrics = useMemo(() => {
-    const totalContacts = allNumbers.length;
+    const totalContacts = new Set(allNumbers.map((n: any) => n.phone_normalized)).size;
     const totalCalls = allCalls.length;
     const calledPhones = new Set<string>();
     const answeredPhones = new Set<string>();

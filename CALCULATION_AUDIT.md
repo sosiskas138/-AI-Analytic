@@ -71,3 +71,10 @@
 3. **ProjectDashboard metrics.answered** — приведено к уникальным номерам (answeredPhones.size).
 4. **ProjectCalls metrics.answered** — приведено к уникальным номерам.
 5. Обновлены подсказки (info) для карточек «Дозвонились» и «Лиды».
+
+## Дополнительные исправления (расхождения между страницами)
+
+6. **ProjectCallLists totals.spent** — ранее `spent = report.reduce(...)` давал двойной подсчёт: один номер в нескольких колл-листах учитывался несколько раз. Исправлено: `spent = calledPhones.size × ppc`.
+7. **ProjectCallListDetail totals.spent** — аналогично: `totalSpent = dailyReport.reduce(...)` считал один номер в разные дни дважды. Исправлено: `totalSpent = calledPhones.size × ppc`.
+8. **ProjectSuppliersGCK totals.received** — «Количество контактов» считалось как сумма по поставщикам (один номер у двух поставщиков = 2). По CALCULATION_AUDIT «Получено = Уникальные номера в базе». Исправлено: `totalReceived = uniqueReceivedPhones.size`.
+9. **ProjectDashboard metrics.totalContacts** — считалось как `allNumbers.length` (записи). Исправлено: уникальные `phone_normalized` в базе.

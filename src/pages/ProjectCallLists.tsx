@@ -146,7 +146,8 @@ export default function ProjectSuppliers() {
     const received = calledPhones.size;
     const answered = answeredPhones.size;
     const leads = leadPhones.size;
-    const spent = report.reduce((s, r) => s + r.spent, 0);
+    // spent = уникальные прозвоненные × ppc (не sum по колл-листам — иначе один номер в нескольких листах считался бы дважды)
+    const spent = received * ppc;
 
     return {
       received,
@@ -158,7 +159,7 @@ export default function ProjectSuppliers() {
       spent,
       cost_per_lead: leads > 0 ? Math.round(spent / leads) : 0,
     };
-  }, [calls, report, dateRange, pricing]);
+  }, [calls, dateRange, pricing]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);

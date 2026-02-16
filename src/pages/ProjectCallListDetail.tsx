@@ -134,7 +134,9 @@ export default function ProjectCallListDetail() {
     const received = calledPhones.size;
     const answered = answeredPhones.size;
     const leads = leadPhones.size;
-    totalSpent = dailyReport.reduce((s, r) => s + r.spent, 0);
+    // totalSpent = уникальные прозвоненные × ppc (не sum по дням — иначе один номер в разные дни считался бы дважды)
+    const ppc = (pricing as any)?.price_per_contact ?? 0;
+    totalSpent = received * ppc;
 
     return {
       received, answered, leads, total_calls: totalCalls, spent: totalSpent,
@@ -142,7 +144,7 @@ export default function ProjectCallListDetail() {
       conversion_rate: answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0,
       cost_per_lead: leads > 0 ? Math.round(totalSpent / leads) : 0,
     };
-  }, [calls, dailyReport, dateRange]);
+  }, [calls, dateRange, pricing]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);
