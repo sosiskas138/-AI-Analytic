@@ -18,6 +18,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { isStatusSuccessful } from "@/lib/utils";
+import { callRatePercent, answerRatePercent, conversionRatePercent } from "@/lib/calculations";
 
 export default function ProjectSuppliersGCK() {
   const { projectId } = useParams();
@@ -126,7 +127,7 @@ export default function ProjectSuppliersGCK() {
 
     // Aggregate calls
     for (const c of calls) {
-    if (dateRange.from || dateRange.to) {
+      if (dateRange.from || dateRange.to) {
         const date = c.call_at?.slice(0, 10);
         if (dateRange.from && date && date < format(dateRange.from, "yyyy-MM-dd")) continue;
         if (dateRange.to && date && date > format(dateRange.to, "yyyy-MM-dd")) continue;
@@ -160,9 +161,9 @@ export default function ProjectSuppliersGCK() {
         const info = supplierIdToInfo.get(supplierId);
         const ppc = info?.ppc ?? 0;
 
-        const callRate = received > 0 ? +((called / received) * 100).toFixed(1) : 0;
-        const answerRate = called > 0 ? +((answered / called) * 100).toFixed(1) : 0;
-        const conversionRate = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
+        const callRate = callRatePercent(called, received);
+        const answerRate = answerRatePercent(answered, called);
+        const conversionRate = conversionRatePercent(leads, answered);
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
 
         const spent = received * ppc;
@@ -223,9 +224,9 @@ export default function ProjectSuppliersGCK() {
       called,
       answered,
       leads,
-      call_rate: totalReceived > 0 ? +((called / totalReceived) * 100).toFixed(1) : 0,
-      answer_rate: called > 0 ? +((answered / called) * 100).toFixed(1) : 0,
-      conversion_rate: answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0,
+      call_rate: callRatePercent(called, totalReceived),
+      answer_rate: answerRatePercent(answered, called),
+      conversion_rate: conversionRatePercent(leads, answered),
       spent: totalSpent,
       cost_per_lead: leads > 0 ? Math.round(totalSpent / leads) : 0,
     };
@@ -308,17 +309,17 @@ export default function ProjectSuppliersGCK() {
           )}
         </div>
       </div>
-          {/* Summary cards */}
+          {/* Summary cards — формулы по CALCULATION_AUDIT */}
           {totals && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-              <KPICard title="Количество контактов" value={totals.received.toLocaleString()} icon={Users} delay={0} info="Получено номеров от поставщиков" />
-              <KPICard title="Количество прозвонили" value={totals.called.toLocaleString()} icon={Phone} delay={0.05} info="Уникальные номера, по которым звонили" />
-              <KPICard title="Количество дозвонились" value={totals.answered.toLocaleString()} icon={PhoneCall} delay={0.1} info="Номера со статусом «Успешный»" />
-              <KPICard title="% прозвонили" value={`${totals.call_rate}%`} icon={Phone} delay={0.12} info="Прозвонили / Контакты × 100%" />
-              <KPICard title="% дозвонились" value={`${totals.answer_rate}%`} icon={PhoneCall} delay={0.15} info="Дозвонились / Прозвонили × 100%" />
-              <KPICard title="% в лид из дозвонившихся" value={`${totals.conversion_rate}%`} icon={Target} delay={0.2} info="Лиды / Дозвонились × 100%" />
-              <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.22} info="Уникальные номера, отмеченные как лид" />
-              <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.25} info="Контакты × Стоимость контакта" />
+              <KPICard title="Контактов" value={totals.received.toLocaleString()} icon={Users} delay={0} info="Уникальные номера в базе (supplier_numbers)" />
+              <KPICard title="Прозвонили" value={totals.called.toLocaleString()} icon={Phone} delay={0.05} info="Уникальные номера, по которым звонили" />
+              <KPICard title="Дозвонились" value={totals.answered.toLocaleString()} icon={PhoneCall} delay={0.1} info="Уникальные номера со статусом «Успешный»" />
+              <KPICard title="% прозвонили" value={`${totals.call_rate}%`} icon={Phone} delay={0.12} info="Прозвонили / Контактов × 100%" />
+              <KPICard title="% дозвонились" value={`${totals.answer_rate}%`} icon={PhoneCall} delay={0.15} info="Дозвонились / Прозвонили × 100% (из тех что прозвонили)" />
+              <KPICard title="Конверсия в лид %" value={`${totals.conversion_rate}%`} icon={Target} delay={0.2} info="Лиды / Дозвонились × 100%" />
+              <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.22} info="Уникальные номера с is_lead=true" />
+              <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.25} info="Сумма: контакты × цена по каждому поставщику" />
               <KPICard title="₽ / лид" value={totals.cost_per_lead > 0 ? `${totals.cost_per_lead.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.3} info="Потрачено / Лиды" />
             </div>
           )}
@@ -380,7 +381,7 @@ export default function ProjectSuppliersGCK() {
                             <RateBadge value={r.call_rate} thresholds={[30, 70]} />
                           </td>
                           <td className="px-4 py-3">
-                            <RateBadge value={r.called > 0 ? +((r.answered / r.called) * 100).toFixed(1) : 0} />
+                            <RateBadge value={r.answer_rate} />
                           </td>
                           <td className="px-4 py-3">
                             <RateBadge value={r.conversion_rate} thresholds={[5, 15]} />

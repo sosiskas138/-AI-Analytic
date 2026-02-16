@@ -16,6 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { cn, isStatusSuccessful } from "@/lib/utils";
+import { answerRatePercent } from "@/lib/calculations";
 import { motion } from "framer-motion";
 
 type DateRange = { from: Date | undefined; to: Date | undefined };
@@ -165,10 +166,10 @@ export default function ProjectDashboard() {
       if (isStatusSuccessful(c.status)) answeredPhones.add(phone);
       if (c.is_lead) leadPhones.add(phone);
     }
-    const uniqueCalls = calledPhones.size; // контактов обработано
+    const uniqueCalls = calledPhones.size; // контактов обработано = прозвонили
     const answered = answeredPhones.size;  // дозвонились
     const leads = leadPhones.size;
-    const answerRate = uniqueCalls > 0 ? (answered / uniqueCalls) * 100 : 0;
+    const answerRate = answerRatePercent(answered, uniqueCalls); // % дозвона = Дозвонились/Прозвонили
     const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
     return { totalContacts, totalCalls, uniqueCalls, answered, answerRate, leads, totalMinutes };
   }, [allCalls, allNumbers]);

@@ -78,3 +78,18 @@ export function uniquePhonesFromNumbers(numbers: NumberLike[], excludeDuplicates
 export function spentForCalledPhones(uniqueCalledCount: number, ppc: number): number {
   return uniqueCalledCount * ppc;
 }
+
+/** % прозвонили = Прозвонили / Контактов × 100 */
+export function callRatePercent(called: number, received: number): number {
+  return received > 0 ? +((called / received) * 100).toFixed(1) : 0;
+}
+
+/** % дозвонились = Дозвонились / Прозвонили × 100 (из тех что прозвонили) */
+export function answerRatePercent(answered: number, called: number): number {
+  return called > 0 ? +((answered / called) * 100).toFixed(1) : 0;
+}
+
+/** Конверсия в лид % = Лиды / Дозвонились × 100 */
+export function conversionRatePercent(leads: number, answered: number): number {
+  return answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
+}
