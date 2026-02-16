@@ -267,17 +267,19 @@ router.get('/:projectId/members', authenticate, requireProjectAccess, async (req
 // Add project member (admin only)
 router.post('/:projectId/members', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { userId, allowedTabs } = req.body;
+    const { userId, allowedTabs, canCreateSuppliers } = req.body;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
     const result = await query(
-      `INSERT INTO project_members (project_id, user_id, allowed_tabs)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (project_id, user_id) DO UPDATE SET allowed_tabs = $3
+      `INSERT INTO project_members (project_id, user_id, allowed_tabs, can_create_suppliers)
+       VALUES ($1, $2, $3, COALESCE($4, false))
+       ON CONFLICT (project_id, user_id) DO UPDATE SET
+         allowed_tabs = EXCLUDED.allowed_tabs,
+         can_create_suppliers = COALESCE(EXCLUDED.can_create_suppliers, false)
        RETURNING *`,
-      [req.params.projectId, userId, allowedTabs || []]
+      [req.params.projectId, userId, allowedTabs || [], canCreateSuppliers ?? false]
     );
 
     res.status(201).json(result.rows[0]);
@@ -290,11 +292,38 @@ router.post('/:projectId/members', authenticate, requireAdmin, async (req, res) 
 // Update project member (admin only)
 router.put('/:projectId/members/:membershipId', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { allowedTabs } = req.body;
-    await query(
-      'UPDATE project_members SET allowed_tabs = $1 WHERE id = $2',
-      [allowedTabs || [], req.params.membershipId]
-    );
+    const { allowedTabs, canCreateSuppliers } = req.body;
+
+    if (allowedTabs !== undefined && canCreateSuppliers === undefined) {
+      await query(
+        'UPDATE project_members SET allowed_tabs = $1 WHERE id = $2',
+        [allowedTabs || [], req.params.membershipId]
+      );
+    } else if (canCreateSuppliers !== undefined && allowedTabs === undefined) {
+      await query(
+        'UPDATE project_members SET can_create_suppliers = $1 WHERE id = $2',
+        [!!canCreateSuppliers, req.params.membershipId]
+      );
+    } else if (allowedTabs !== undefined || canCreateSuppliers !== undefined) {
+      const updates: string[] = [];
+      const values: any[] = [];
+      let i = 1;
+      if (allowedTabs !== undefined) {
+        updates.push(`allowed_tabs = $${i++}`);
+        values.push(allowedTabs || []);
+      }
+      if (canCreateSuppliers !== undefined) {
+        updates.push(`can_create_suppliers = $${i++}`);
+        values.push(!!canCreateSuppliers);
+      }
+      values.push(req.params.membershipId);
+      await query(
+        `UPDATE project_members SET ${updates.join(', ')} WHERE id = $${i}`,
+        values
+      );
+    } else {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
     res.json({ message: 'Member updated successfully' });
   } catch (error: any) {
     console.error('Update member error:', error);

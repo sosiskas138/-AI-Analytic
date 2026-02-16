@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Loader2, CalendarIcon, Phone, Target, PhoneCall, TrendingUp, Users, DollarSign, ShieldCheck } from "lucide-react";
+import { Loader2, CalendarIcon, Phone, Target, PhoneCall, TrendingUp, Users, DollarSign, ShieldCheck, Plus } from "lucide-react";
 import { KPICard } from "@/components/KPICard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format, startOfDay, endOfDay } from "date-fns";
@@ -19,11 +19,22 @@ import {
 } from "recharts";
 import { isStatusSuccessful } from "@/lib/utils";
 import { callRatePercent, answerRatePercent, conversionRatePercent } from "@/lib/calculations";
+import { useProjectAccess } from "@/hooks/useProjectAccess";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 export default function ProjectSuppliersGCK() {
   const { projectId } = useParams();
+  const queryClient = useQueryClient();
+  const { canCreateSuppliers } = useProjectAccess(projectId);
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [selectedSupplier, setSelectedSupplier] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newBaseName, setNewBaseName] = useState("");
+  const [creating, setCreating] = useState(false);
 
   // Fetch suppliers - все поставщики (Базы = все базы)
   const { data: suppliers } = useQuery({
@@ -238,6 +249,27 @@ export default function ProjectSuppliersGCK() {
     return m > 0 ? `${m}м ${sec}с` : `${sec}с`;
   };
 
+  const handleCreateBase = async () => {
+    if (!projectId || !newBaseName.trim()) return;
+    setCreating(true);
+    try {
+      await api.createSupplier({
+        project_id: projectId,
+        name: newBaseName.trim(),
+        tag: newBaseName.trim(),
+      });
+      toast.success("База создана. Цену установит администратор.");
+      setNewBaseName("");
+      setCreateOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["suppliers-base", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers", projectId] });
+    } catch (err: any) {
+      toast.error(err.message || "Ошибка создания базы");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -253,6 +285,40 @@ export default function ProjectSuppliersGCK() {
           <h1 className="text-3xl font-bold tracking-tight">Базы</h1>
           <p className="text-muted-foreground mt-1">Анализ результативности баз номеров</p>
         </div>
+        {canCreateSuppliers && (
+          <>
+            <Button onClick={() => setCreateOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Создать базу
+            </Button>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Создать базу</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Укажите название базы. Цену за контакт установит администратор.
+              </p>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Название базы</label>
+                <Input
+                  value={newBaseName}
+                  onChange={(e) => setNewBaseName(e.target.value)}
+                  placeholder="Например: База МТС"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                  Отмена
+                </Button>
+                <Button onClick={handleCreateBase} disabled={creating || !newBaseName.trim()}>
+                  {creating ? "Создание..." : "Создать"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+        )}
       </div>
 
       {/* Filters */}

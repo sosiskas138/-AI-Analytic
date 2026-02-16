@@ -30,13 +30,16 @@ export function useProjectAccess(projectId?: string) {
     return {
       allowedTabs: ALL_TABS.map((t) => t.key) as TabKey[],
       hasTab: (_tab: TabKey) => true,
+      canCreateSuppliers: true,
     };
   }
 
   const allowedTabs = (membersData?.allowed_tabs as TabKey[]) || [];
+  const canCreateSuppliers = !!(membersData as any)?.can_create_suppliers;
 
   return {
     allowedTabs,
     hasTab: (tab: TabKey) => allowedTabs.includes(tab),
+    canCreateSuppliers,
   };
 }

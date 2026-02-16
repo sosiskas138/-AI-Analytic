@@ -74,3 +74,25 @@ export async function requireProjectAccess(req: AuthRequest, res: Response, next
 
   next();
 }
+
+/** Requires project access AND can_create_suppliers (or admin). Use after requireProjectAccess. */
+export async function requireCanCreateSuppliers(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (req.user.isAdmin) {
+    return next();
+  }
+  const projectId = req.params.projectId || req.body.project_id;
+  if (!projectId) {
+    return res.status(400).json({ error: 'Project ID required' });
+  }
+  const result = await query(
+    'SELECT COALESCE(can_create_suppliers, false) as can_create_suppliers FROM project_members WHERE user_id = $1 AND project_id = $2',
+    [req.user.userId, projectId]
+  );
+  if (result.rows.length === 0 || !result.rows[0].can_create_suppliers) {
+    return res.status(403).json({ error: 'Forbidden: No permission to create bases in this project' });
+  }
+  next();
+}

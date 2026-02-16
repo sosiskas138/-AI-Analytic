@@ -326,6 +326,17 @@ export default function Admin() {
     }
   };
 
+  const toggleCanCreateSuppliers = async (membershipId: string, current: boolean) => {
+    try {
+      const membership = allMembers?.find((m) => m.id === membershipId);
+      if (!membership) throw new Error("Membership not found");
+      await api.updateProjectMember(membership.project_id, membershipId, { canCreateSuppliers: !current });
+      refetchMembers();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   // ---- Supplier functions ----
   const addSupplier = async () => {
     if (!selectedProjectForSupplier || !newSupplierName.trim()) return;
@@ -643,6 +654,7 @@ export default function Admin() {
                           ) : (
                             userProjects.map((m) => {
                               const tabs = (m as any).allowed_tabs as string[] || [];
+                              const canCreateSuppliers = !!(m as any).can_create_suppliers;
                               return (
                                 <div key={m.id} className="rounded-lg bg-muted/30 p-3">
                                   <div className="flex items-center justify-between mb-2">
@@ -673,6 +685,14 @@ export default function Admin() {
                                       </label>
                                     ))}
                                   </div>
+                                  <label className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 cursor-pointer">
+                                    <Checkbox
+                                      checked={canCreateSuppliers}
+                                      onCheckedChange={() => toggleCanCreateSuppliers(m.id, canCreateSuppliers)}
+                                      className="h-3 w-3"
+                                    />
+                                    <span className="text-[11px] text-muted-foreground">Может создавать базы</span>
+                                  </label>
                                 </div>
                               );
                             })

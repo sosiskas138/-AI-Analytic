@@ -1,6 +1,6 @@
 import express from 'express';
 import { query } from '../config/database.js';
-import { authenticate, requireAdmin, requireProjectAccess, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requireProjectAccess, requireCanCreateSuppliers, AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -27,13 +27,17 @@ router.get('/project/:projectId', authenticate, requireProjectAccess, async (req
   }
 });
 
-// Create supplier (admin only)
-router.post('/', authenticate, requireAdmin, async (req, res) => {
+// Create supplier (admin or user with can_create_suppliers; only admin sets price)
+router.post('/', authenticate, requireProjectAccess, requireCanCreateSuppliers, async (req: AuthRequest, res) => {
   try {
     const { project_id, name, tag, price_per_contact, is_gck } = req.body;
     if (!project_id || !name) {
       return res.status(400).json({ error: 'Project ID and name are required' });
     }
+
+    const isAdmin = req.user?.isAdmin;
+    const price = isAdmin ? (price_per_contact ?? 0) : 0;
+    const gck = isAdmin ? (is_gck ?? false) : false;
 
     const result = await query(
       `INSERT INTO suppliers (project_id, name, tag, price_per_contact, is_gck)
@@ -42,7 +46,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
          price_per_contact = EXCLUDED.price_per_contact,
          is_gck = EXCLUDED.is_gck
        RETURNING *`,
-      [project_id, name, tag || '', price_per_contact || 0, is_gck || false]
+      [project_id, name, tag || '', price, gck]
     );
 
     res.status(201).json(result.rows[0]);
@@ -52,11 +56,31 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// Update supplier (admin only)
-router.put('/:supplierId', authenticate, requireAdmin, async (req, res) => {
+// Update supplier (admin: full; user with can_create_suppliers: only name, tag)
+router.put('/:supplierId', authenticate, async (req: AuthRequest, res) => {
   try {
     const { supplierId } = req.params;
     const { name, tag, price_per_contact, is_gck } = req.body;
+
+    const supplierCheck = await query('SELECT project_id FROM suppliers WHERE id = $1', [supplierId]);
+    if (supplierCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Supplier not found' });
+    }
+    const projectId = supplierCheck.rows[0].project_id;
+
+    const isAdmin = req.user?.isAdmin;
+    let canEdit = isAdmin;
+    if (!isAdmin) {
+      const pm = await query(
+        'SELECT COALESCE(can_create_suppliers, false) as can FROM project_members WHERE user_id = $1 AND project_id = $2',
+        [req.user!.userId, projectId]
+      );
+      canEdit = pm.rows.length > 0 && pm.rows[0].can;
+    }
+
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Forbidden: No permission to edit bases' });
+    }
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -70,11 +94,11 @@ router.put('/:supplierId', authenticate, requireAdmin, async (req, res) => {
       updates.push(`tag = $${paramCount++}`);
       values.push(tag);
     }
-    if (price_per_contact !== undefined) {
+    if (isAdmin && price_per_contact !== undefined) {
       updates.push(`price_per_contact = $${paramCount++}`);
       values.push(price_per_contact);
     }
-    if (is_gck !== undefined) {
+    if (isAdmin && is_gck !== undefined) {
       updates.push(`is_gck = $${paramCount++}`);
       values.push(is_gck);
     }

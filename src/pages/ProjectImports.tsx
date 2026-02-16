@@ -1,8 +1,9 @@
 import { useParams } from "react-router-dom";
 import { useRef, useState } from "react";
+import { useProjectAccess } from "@/hooks/useProjectAccess";
 import { motion } from "framer-motion";
 import {
-  FileUp, Upload, CheckCircle2, Loader2, AlertCircle, X, ArrowRight, Trash2,
+  FileUp, Upload, CheckCircle2, Loader2, AlertCircle, X, ArrowRight, Trash2, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -66,6 +68,7 @@ function normalizeHeaders(headers: string[], type: ImportType): Record<string, s
 export default function ProjectImports() {
   const { projectId } = useParams();
   const queryClient = useQueryClient();
+  const { canCreateSuppliers } = useProjectAccess(projectId);
   const suppliersInputRef = useRef<HTMLInputElement>(null);
   const callsInputRef = useRef<HTMLInputElement>(null);
   const gckInputRef = useRef<HTMLInputElement>(null);
@@ -75,6 +78,9 @@ export default function ProjectImports() {
   const [importing, setImporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [createBaseOpen, setCreateBaseOpen] = useState(false);
+  const [newBaseName, setNewBaseName] = useState("");
+  const [creatingBase, setCreatingBase] = useState(false);
 
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers", projectId],
@@ -264,6 +270,28 @@ export default function ProjectImports() {
     }
   };
 
+  const handleCreateBase = async () => {
+    if (!projectId || !newBaseName.trim()) return;
+    setCreatingBase(true);
+    try {
+      await api.createSupplier({
+        project_id: projectId,
+        name: newBaseName.trim(),
+        tag: newBaseName.trim(),
+      });
+      toast.success("База создана. Цену установит администратор.");
+      setNewBaseName("");
+      setCreateBaseOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["suppliers", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers-gck", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["supplier-numbers-base", projectId] });
+    } catch (err: any) {
+      toast.error(err.message || "Ошибка создания базы");
+    } finally {
+      setCreatingBase(false);
+    }
+  };
+
   const handleDeleteImport = async (importId: string) => {
     if (!confirm("Удалить запись об импорте? Данные (звонки/номера) при этом не удаляются.")) return;
     setDeletingId(importId);
@@ -396,7 +424,36 @@ export default function ProjectImports() {
                 <p className="text-xs text-destructive">Выберите поставщика для этой партии номеров</p>
               )}
               {(!suppliers || suppliers.filter((s: any) => !s.is_gck).length === 0) && (
-                <p className="text-xs text-muted-foreground">Добавьте поставщика (не ГЦК) в разделе Администрирование</p>
+                <div className="flex items-center gap-2">
+                  {canCreateSuppliers ? (
+                    <>
+                      <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => setCreateBaseOpen(true)}>
+                        <Plus className="h-3 w-3" />
+                        Создать базу
+                      </Button>
+                      <Dialog open={createBaseOpen} onOpenChange={setCreateBaseOpen}>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Создать базу</DialogTitle>
+                          </DialogHeader>
+                          <p className="text-sm text-muted-foreground">Цену за контакт установит администратор.</p>
+                          <div>
+                            <label className="text-sm font-medium mb-1.5 block">Название базы</label>
+                            <Input value={newBaseName} onChange={(e) => setNewBaseName(e.target.value)} placeholder="Например: База МТС" />
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setCreateBaseOpen(false)}>Отмена</Button>
+                            <Button onClick={handleCreateBase} disabled={creatingBase || !newBaseName.trim()}>
+                              {creatingBase ? "Создание..." : "Создать"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Добавьте поставщика (не ГЦК) в разделе Администрирование</p>
+                  )}
+                </div>
               )}
             </div>
           )}

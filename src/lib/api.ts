@@ -257,7 +257,7 @@ class ApiClient {
     return this.request<{ members: any[] }>(`/projects/${projectId}/members`);
   }
 
-  async addProjectMember(projectId: string, data: { userId: string; allowedTabs?: string[] }) {
+  async addProjectMember(projectId: string, data: { userId: string; allowedTabs?: string[]; canCreateSuppliers?: boolean }) {
     return this.request(`/projects/${projectId}/members`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -270,7 +270,7 @@ class ApiClient {
     });
   }
 
-  async updateProjectMember(projectId: string, membershipId: string, data: { allowedTabs?: string[] }) {
+  async updateProjectMember(projectId: string, membershipId: string, data: { allowedTabs?: string[]; canCreateSuppliers?: boolean }) {
     return this.request(`/projects/${projectId}/members/${membershipId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
