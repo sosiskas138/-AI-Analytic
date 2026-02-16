@@ -379,7 +379,7 @@ export default function ProjectSuppliersGCK() {
                             <RateBadge value={r.call_rate} thresholds={[30, 70]} />
                           </td>
                           <td className="px-4 py-3">
-                            <RateBadge value={r.answer_rate} />
+                            <RateBadge value={r.called > 0 ? +((r.answered / r.called) * 100).toFixed(1) : 0} />
                           </td>
                           <td className="px-4 py-3">
                             <RateBadge value={r.conversion_rate} thresholds={[5, 15]} />
