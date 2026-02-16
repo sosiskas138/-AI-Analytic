@@ -231,7 +231,7 @@ export default function ProjectDashboard() {
         received,
         called,
         callRate: received > 0 ? +((called / received) * 100).toFixed(1) : 0,
-        answerRate: called > 0 ? +((answeredUnique / called) * 100).toFixed(1) : 0,
+        answerRate: received > 0 ? +((answeredUnique / received) * 100).toFixed(1) : 0,
         convRate: answeredUnique > 0 ? +((lds / answeredUnique) * 100).toFixed(1) : 0,
         leads: lds,
       };
