@@ -151,12 +151,11 @@ export default function ProjectDashboard() {
 
   // ---- Общие метрики ----
   // Попыток вызова = количество строк в звонках (все попытки робота)
-  // Количество контактов = уникальные номера в supplier_numbers (без дублей)
+  // Количество контактов = уникальные номера в загруженных звонках (не в базе)
   // Дозвонились = количество звонков со статусом Успешный (по строкам, с дублями)
   // % дозвона = от уникальных: уникальные дозвоны / уникальные попытки
   const metrics = useMemo(() => {
     const callAttempts = allCalls.length; // попыток вызова
-    const totalContacts = new Set(allNumbers.map((n: any) => n.phone_normalized)).size; // контакты без дублей
     let answeredCount = 0;
     const attemptedPhones = new Set<string>();
     const answeredPhones = new Set<string>();
@@ -172,8 +171,9 @@ export default function ProjectDashboard() {
     const leads = leadPhones.size;
     const answerRate = attemptedPhones.size > 0 ? answerRatePercent(answeredPhones.size, attemptedPhones.size) : 0;
     const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
+    const totalContacts = attemptedPhones.size; // уникальные номера в загруженных звонках
     return { totalContacts, callAttempts, answeredCount, answerRate, leads, totalMinutes };
-  }, [allCalls, allNumbers]);
+  }, [allCalls]);
 
   // ---- Финансы ----
   const finance = useMemo(() => {
@@ -393,7 +393,7 @@ export default function ProjectDashboard() {
         <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Общее</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <KPICard title="Попыток вызова" value={metrics.callAttempts.toLocaleString()} icon={Phone} delay={0} info="Количество строк в звонках робота" />
-          <KPICard title="Количество контактов" value={metrics.totalContacts.toLocaleString()} icon={Users} delay={0.05} info="Уникальные номера в базе (без дублей)" />
+          <KPICard title="Количество контактов" value={metrics.totalContacts.toLocaleString()} icon={Users} delay={0.05} info="Уникальные номера в загруженных звонках (без дублей)" />
           <KPICard title="Дозвонились" value={metrics.answeredCount.toLocaleString()} icon={PhoneCall} delay={0.1} info="Звонки со статусом «Успешный» (все попытки с дублями)" />
           <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Уникальные дозвоны / Уникальные попытки × 100%" />
           <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Target} delay={0.2} info="Уникальные номера, отмеченные как лид" valueClassName="text-success" />
