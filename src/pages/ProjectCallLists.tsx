@@ -47,8 +47,21 @@ export default function ProjectSuppliers() {
     enabled: !!projectId,
   });
 
+  const fromTs = dateRange.from?.getTime();
+  const toTs = dateRange.to?.getTime();
+  const filteredCalls = useMemo(() => {
+    const raw = calls || [];
+    if (!fromTs && !toTs) return raw;
+    return raw.filter((c: any) => {
+      const t = new Date(c.call_at).getTime();
+      if (fromTs && t < fromTs) return false;
+      if (toTs && t > toTs) return false;
+      return true;
+    });
+  }, [calls, fromTs, toTs]);
+
   const report = useMemo(() => {
-    const allCalls = calls || [];
+    const allCalls = filteredCalls;
     const ppc = (pricing as any)?.price_per_contact ?? 0;
 
     // Group calls by call_list
@@ -62,10 +75,6 @@ export default function ProjectSuppliers() {
     }>();
 
     for (const c of allCalls) {
-      const date = c.call_at?.slice(0, 10);
-      if (dateRange.from && date && date < format(dateRange.from, "yyyy-MM-dd")) continue;
-      if (dateRange.to && date && date > format(dateRange.to, "yyyy-MM-dd")) continue;
-
       const listName = c.call_list?.trim() || "Без колл-листа";
 
       if (!byList.has(listName)) {
@@ -99,11 +108,12 @@ export default function ProjectSuppliers() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([listName, d]) => {
         const received = d.calledPhones.size;
-        const answered = d.answeredPhones.size;
+        const answeredUnique = d.answeredPhones.size;
+        const answeredCount = d.answeredCalls; // строк со статусом Успешный (как на Дашборде)
         const leads = d.leadPhones.size;
 
-        const answerRate = received > 0 ? +((answered / received) * 100).toFixed(1) : 0;
-        const conversionRate = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
+        const answerRate = received > 0 ? +((answeredUnique / received) * 100).toFixed(1) : 0;
+        const conversionRate = answeredCount > 0 ? +((leads / answeredCount) * 100).toFixed(1) : 0;
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
 
         const spent = received * ppc;
@@ -112,7 +122,7 @@ export default function ProjectSuppliers() {
         return {
           callList: listName,
           received,
-          answered,
+          answered: answeredCount,
           leads,
           answer_rate: answerRate,
           conversion_rate: conversionRate,
@@ -122,11 +132,11 @@ export default function ProjectSuppliers() {
           cost_per_lead: costPerLead,
         };
       });
-  }, [calls, dateRange, pricing]);
+  }, [filteredCalls, pricing]);
 
-  // Totals (from raw calls to avoid double-counting phones across lists)
+  // Totals — логика как на Дашборде: фильтр по timestamp, Дозвон = count строк
   const totals = useMemo(() => {
-    const allCalls = calls || [];
+    const allCalls = filteredCalls;
     if (allCalls.length === 0) return null;
 
     const ppc = (pricing as any)?.price_per_contact ?? 0;
@@ -134,32 +144,31 @@ export default function ProjectSuppliers() {
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     let totalCalls = 0;
+    let answeredCount = 0;
     for (const c of allCalls) {
-      const date = c.call_at?.slice(0, 10);
-      if (dateRange.from && date && date < format(dateRange.from, "yyyy-MM-dd")) continue;
-      if (dateRange.to && date && date > format(dateRange.to, "yyyy-MM-dd")) continue;
       totalCalls++;
       calledPhones.add(c.phone_normalized);
-      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) {
+        answeredCount++;
+        answeredPhones.add(c.phone_normalized);
+      }
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
     const received = calledPhones.size;
-    const answered = answeredPhones.size;
     const leads = leadPhones.size;
-    // spent = уникальные прозвоненные × ppc (не sum по колл-листам — иначе один номер в нескольких листах считался бы дважды)
     const spent = received * ppc;
 
     return {
       received,
-      answered,
+      answered: answeredCount,
       leads,
-      answer_rate: received > 0 ? +((answered / received) * 100).toFixed(1) : 0,
-      conversion_rate: answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0,
+      answer_rate: received > 0 ? +((answeredPhones.size / received) * 100).toFixed(1) : 0,
+      conversion_rate: answeredCount > 0 ? +((leads / answeredCount) * 100).toFixed(1) : 0,
       total_calls: totalCalls,
       spent,
       cost_per_lead: leads > 0 ? Math.round(spent / leads) : 0,
     };
-  }, [calls, dateRange, pricing]);
+  }, [filteredCalls, pricing]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);
@@ -230,7 +239,7 @@ export default function ProjectSuppliers() {
       {totals && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <KPICard title="Получено номеров" value={totals.received.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров, по которым были звонки" />
-          <KPICard title="Дозвон" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.05} info="Номера со статусом «Успешный» / Прозвонено × 100%" />
+          <KPICard title="Дозвонились" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.05} info="Звонки со статусом «Успешный» (по строкам). % = уникальные дозвоны / уникальные попытки" />
           <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.1} info="Уникальные номера, отмеченные как лид" />
           <KPICard title="Конверсия в лид" value={`${totals.conversion_rate}%`} icon={TrendingUp} delay={0.15} info="Лиды / Дозвонились × 100%" />
           <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.2} info="Получено номеров × Стоимость контакта (ГЦК)" />
@@ -255,7 +264,7 @@ export default function ProjectSuppliers() {
                 <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
                 <Legend />
                 <Bar dataKey="received" name="Получено" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="answered" name="Дозвон" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="answered" name="Дозвонились" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="leads" name="Лиды" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -283,7 +292,7 @@ export default function ProjectSuppliers() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    {["Колл-лист", "Получено", "Дозвон", "% дозвона", "Лиды", "% конверсии", "Потрачено", "₽/лид", "Ср. длит."].map((h) => (
+                    {["Колл-лист", "Получено", "Дозвонились", "% дозвона", "Лиды", "% конверсии", "Потрачено", "₽/лид", "Ср. длит."].map((h) => (
                       <th key={h} className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
