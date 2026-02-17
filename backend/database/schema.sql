@@ -135,7 +135,9 @@ CREATE TABLE reanimation_exports (
   exported_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   phone_count INTEGER NOT NULL DEFAULT 0,
   duration_filter TEXT NOT NULL DEFAULT 'all',
-  filename TEXT NOT NULL DEFAULT ''
+  filename TEXT NOT NULL DEFAULT '',
+  date_from TIMESTAMPTZ,
+  date_to TIMESTAMPTZ
 );
 
 -- Reanimation export numbers
