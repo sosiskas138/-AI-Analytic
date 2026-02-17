@@ -108,10 +108,11 @@ function StatsTabContent({
     return [...names].sort();
   }, [allStatuses]);
 
+  const effectiveProjectFilter = statsProjectFilter === "all" && projects?.[0] ? projects[0].id : statsProjectFilter;
   const filteredProjects = useMemo(() => {
     let list = projects;
-    if (statsProjectFilter !== "all") {
-      list = list.filter((p) => p.id === statsProjectFilter);
+    if (effectiveProjectFilter && effectiveProjectFilter !== "all") {
+      list = list.filter((p) => p.id === effectiveProjectFilter);
     }
     if (statsResponsibleFilter !== "all") {
       const byProj = new Map<string, any>();
@@ -125,7 +126,7 @@ function StatsTabContent({
       list = list.filter((p) => !!(byProj.get(p.id) as any)?.launched_to_production === inWork);
     }
     return list;
-  }, [projects, allStatuses, statsProjectFilter, statsResponsibleFilter, statsInWorkFilter]);
+  }, [projects, allStatuses, effectiveProjectFilter, statsResponsibleFilter, statsInWorkFilter]);
 
   const projectMetrics = useMemo(() => {
     const map = new Map<string, {
@@ -239,12 +240,14 @@ function StatsTabContent({
             />
           </PopoverContent>
         </Popover>
-        <Select value={statsProjectFilter} onValueChange={setStatsProjectFilter}>
+        <Select
+          value={statsProjectFilter === "all" && projects?.[0] ? projects[0].id : statsProjectFilter}
+          onValueChange={setStatsProjectFilter}
+        >
           <SelectTrigger className="w-48 h-8 text-xs">
             <SelectValue placeholder="Проект" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Все проекты</SelectItem>
             {projects?.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
             ))}
@@ -480,17 +483,19 @@ export default function Admin() {
   });
 
   const { data: allCalls } = useQuery({
-    queryKey: ["admin-all-calls"],
+    queryKey: ["admin-all-calls", (projects || []).map((p) => p.id).sort().join(",")],
     queryFn: async () => {
       const all: any[] = [];
       for (const project of projects) {
         let page = 1;
         const pageSize = 1000;
+        let fetched = 0;
         while (true) {
           const response = await api.getCalls(project.id, { page, pageSize });
           if (!response.calls || response.calls.length === 0) break;
           all.push(...response.calls);
-          if (response.calls.length < pageSize || all.length >= response.total) break;
+          fetched += response.calls.length;
+          if (response.calls.length < pageSize || fetched >= response.total) break;
           page++;
         }
       }
@@ -500,17 +505,19 @@ export default function Admin() {
   });
 
   const { data: allNumbers } = useQuery({
-    queryKey: ["admin-all-numbers"],
+    queryKey: ["admin-all-numbers", (projects || []).map((p) => p.id).sort().join(",")],
     queryFn: async () => {
       const all: any[] = [];
       for (const project of projects) {
         let page = 1;
         const pageSize = 1000;
+        let fetched = 0;
         while (true) {
           const response = await api.getSupplierNumbers(project.id, { page, pageSize });
           if (!response.numbers || response.numbers.length === 0) break;
           all.push(...response.numbers);
-          if (response.numbers.length < pageSize || all.length >= response.total) break;
+          fetched += response.numbers.length;
+          if (response.numbers.length < pageSize || fetched >= response.total) break;
           page++;
         }
       }
