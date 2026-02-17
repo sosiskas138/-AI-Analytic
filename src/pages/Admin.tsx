@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Users, DollarSign, Loader2, Package, Plus, Trash2, BarChart3, UserPlus, Shield, FolderKanban, Eye, EyeOff,
-  CheckCircle2, Circle, ExternalLink, KeyRound, Pencil, Database,
+  Users, DollarSign, Loader2, Package, Plus, Trash2, BarChart3, UserPlus, FolderKanban, Eye, EyeOff,
+  CheckCircle2, Circle, ExternalLink, KeyRound, Pencil, Database, CalendarIcon, LayoutGrid, List,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,405 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { ALL_TABS, TabKey } from "@/hooks/useProjectAccess";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { format, subDays, startOfDay, endOfDay, startOfMonth, subMonths } from "date-fns";
+import { ru } from "date-fns/locale";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { isStatusSuccessful } from "@/lib/utils";
+import { answerRatePercent } from "@/lib/calculations";
 
 /** Фильтрует ввод, оставляя только цифры и одну десятичную точку */
 function filterNumericInput(value: string): string {
   const cleaned = value.replace(/[^\d.]/g, "");
   const parts = cleaned.split(".");
   return parts.length > 2 ? parts.slice(0, 2).join(".") : cleaned;
+}
+
+const STATS_PRESETS = [
+  { label: "Сегодня", range: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+  { label: "7 дней", range: () => ({ from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) }) },
+  { label: "30 дней", range: () => ({ from: startOfDay(subDays(new Date(), 29)), to: endOfDay(new Date()) }) },
+  { label: "Этот месяц", range: () => ({ from: startOfMonth(new Date()), to: endOfDay(new Date()) }) },
+  { label: "Всё время", range: () => ({ from: undefined as Date | undefined, to: undefined as Date | undefined }) },
+] as const;
+
+const CHECKBOXES = [
+  { key: "materials_requested", label: "Материалы" },
+  { key: "materials_sent", label: "Отправлены" },
+  { key: "skillbase_ready", label: "Скиллбейз" },
+  { key: "test_launched", label: "Тест" },
+  { key: "launched_to_production", label: "В работе" },
+] as const;
+
+function StatsTabContent({
+  projects,
+  allCalls,
+  allNumbers,
+  allSuppliers,
+  allStatuses,
+  pricingList,
+  statsDateRange,
+  setStatsDateRange,
+  statsPreset,
+  setStatsPreset,
+  statsProjectFilter,
+  setStatsProjectFilter,
+  statsResponsibleFilter,
+  setStatsResponsibleFilter,
+  statsInWorkFilter,
+  setStatsInWorkFilter,
+  statsViewMode,
+  setStatsViewMode,
+  onNavigate,
+  queryClient,
+  api,
+}: {
+  projects: any[];
+  allCalls: any[];
+  allNumbers: any[];
+  allSuppliers: any[];
+  allStatuses: Record<string, any>[];
+  pricingList: any[];
+  statsDateRange: { from?: Date; to?: Date };
+  setStatsDateRange: (r: { from?: Date; to?: Date }) => void;
+  statsPreset: string;
+  setStatsPreset: (v: string) => void;
+  statsProjectFilter: string;
+  setStatsProjectFilter: (v: string) => void;
+  statsResponsibleFilter: string;
+  setStatsResponsibleFilter: (v: string) => void;
+  statsInWorkFilter: string;
+  setStatsInWorkFilter: (v: string) => void;
+  statsViewMode: "detailed" | "compact";
+  setStatsViewMode: (v: "detailed" | "compact") => void;
+  onNavigate: (path: string) => void;
+  queryClient: any;
+  api: any;
+}) {
+  const fromTs = statsDateRange.from?.getTime();
+  const toTs = statsDateRange.to?.getTime();
+
+  const responsibleOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const s of allStatuses) {
+      const r = (s as any).responsible;
+      if (r && String(r).trim()) names.add(String(r).trim());
+    }
+    return [...names].sort();
+  }, [allStatuses]);
+
+  const filteredProjects = useMemo(() => {
+    let list = projects;
+    if (statsProjectFilter !== "all") {
+      list = list.filter((p) => p.id === statsProjectFilter);
+    }
+    if (statsResponsibleFilter !== "all") {
+      const byProj = new Map<string, any>();
+      for (const s of allStatuses) byProj.set((s as any).project_id, s);
+      list = list.filter((p) => (byProj.get(p.id) as any)?.responsible === statsResponsibleFilter);
+    }
+    if (statsInWorkFilter !== "all") {
+      const byProj = new Map<string, any>();
+      for (const s of allStatuses) byProj.set((s as any).project_id, s);
+      const inWork = statsInWorkFilter === "yes";
+      list = list.filter((p) => !!(byProj.get(p.id) as any)?.launched_to_production === inWork);
+    }
+    return list;
+  }, [projects, allStatuses, statsProjectFilter, statsResponsibleFilter, statsInWorkFilter]);
+
+  const projectMetrics = useMemo(() => {
+    const map = new Map<string, {
+      callAttempts: number;
+      totalContacts: number;
+      answeredCount: number;
+      answerRate: number;
+      leads: number;
+      totalCost: number;
+      costPerLead: number;
+      costPerFirstContact: number;
+    }>();
+    for (const project of projects) {
+      const rawCalls = allCalls.filter((c: any) => c.project_id === project.id);
+      const calls = !fromTs && !toTs ? rawCalls : rawCalls.filter((c: any) => {
+        const t = new Date(c.call_at).getTime();
+        if (fromTs && t < fromTs) return false;
+        if (toTs && t > toTs) return false;
+        return true;
+      });
+      const numbers = allNumbers.filter((n: any) => n.project_id === project.id);
+
+      let answeredCount = 0;
+      const attemptedPhones = new Set<string>();
+      const answeredPhones = new Set<string>();
+      const leadPhones = new Set<string>();
+      for (const c of calls) {
+        if (c.phone_normalized) attemptedPhones.add(c.phone_normalized);
+        if (isStatusSuccessful(c.status)) {
+          answeredCount++;
+          if (c.phone_normalized) answeredPhones.add(c.phone_normalized);
+        }
+        if (c.is_lead && c.phone_normalized) leadPhones.add(c.phone_normalized);
+      }
+      const callAttempts = calls.length;
+      const totalContacts = attemptedPhones.size;
+      const leads = leadPhones.size;
+      const answerRate = attemptedPhones.size > 0 ? answerRatePercent(answeredPhones.size, attemptedPhones.size) : 0;
+
+      const projSuppliers = allSuppliers.filter((s: any) => s.project_id === project.id);
+      let contactsCost = 0;
+      for (const sup of projSuppliers) {
+        const numCount = numbers.filter((n: any) => n.supplier_id === sup.id).length;
+        contactsCost += numCount * ((sup as any).price_per_contact || 0);
+      }
+      const pricing = pricingList.find((p: any) => p.project_id === project.id);
+      const minutes = calls.reduce((s: number, c: any) => s + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
+      const minutesCost = minutes * (pricing?.price_per_minute || 0);
+      const totalCost = contactsCost + minutesCost;
+      const costPerLead = leads > 0 ? Math.round(totalCost / leads) : 0;
+      const costPerFirstContact = answeredCount > 0 ? Math.round(totalCost / answeredCount) : 0;
+
+      map.set(project.id, {
+        callAttempts,
+        totalContacts,
+        answeredCount,
+        answerRate,
+        leads,
+        totalCost,
+        costPerLead,
+        costPerFirstContact,
+      });
+    }
+    return map;
+  }, [projects, allCalls, allNumbers, allSuppliers, pricingList, fromTs, toTs]);
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1.5">
+          {STATS_PRESETS.map((p) => (
+            <Button
+              key={p.label}
+              variant={statsPreset === p.label ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                setStatsDateRange(p.range());
+                setStatsPreset(p.label);
+              }}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 gap-2 min-w-[140px] justify-start">
+              <CalendarIcon className="h-4 w-4" />
+              {statsDateRange.from && statsDateRange.to
+                ? `${format(statsDateRange.from, "dd.MM.yy", { locale: ru })} – ${format(statsDateRange.to, "dd.MM.yy", { locale: ru })}`
+                : statsDateRange.from
+                  ? format(statsDateRange.from, "dd.MM.yy", { locale: ru })
+                  : "Период"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="range"
+              selected={statsDateRange.from || statsDateRange.to ? { from: statsDateRange.from, to: statsDateRange.to } : undefined}
+              onSelect={(range) => {
+                setStatsDateRange({
+                  from: range?.from ? startOfDay(range.from) : undefined,
+                  to: range?.to ? endOfDay(range.to) : undefined,
+                });
+                setStatsPreset("");
+              }}
+              numberOfMonths={2}
+              locale={ru}
+            />
+          </PopoverContent>
+        </Popover>
+        <Select value={statsProjectFilter} onValueChange={setStatsProjectFilter}>
+          <SelectTrigger className="w-48 h-8 text-xs">
+            <SelectValue placeholder="Проект" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все проекты</SelectItem>
+            {projects?.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statsResponsibleFilter} onValueChange={setStatsResponsibleFilter}>
+          <SelectTrigger className="w-44 h-8 text-xs">
+            <SelectValue placeholder="Ответственный" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все ответственные</SelectItem>
+            {responsibleOptions.map((name) => (
+              <SelectItem key={name} value={name}>{name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statsInWorkFilter} onValueChange={setStatsInWorkFilter}>
+          <SelectTrigger className="w-36 h-8 text-xs">
+            <SelectValue placeholder="Статус" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все</SelectItem>
+            <SelectItem value="yes">В работе</SelectItem>
+            <SelectItem value="no">Нет</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex rounded-lg border border-border p-0.5">
+          <button
+            type="button"
+            onClick={() => setStatsViewMode("compact")}
+            className={`px-2.5 py-1.5 rounded text-xs flex items-center gap-1.5 ${statsViewMode === "compact" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <List className="h-3.5 w-3.5" />
+            Короткий
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatsViewMode("detailed")}
+            className={`px-2.5 py-1.5 rounded text-xs flex items-center gap-1.5 ${statsViewMode === "detailed" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Подробный
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {statsViewMode === "compact" ? (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-4 py-3 font-medium">Проект</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Попыток</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Контакты</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Дозвонились</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">% дозвона</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Лиды</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Стоимость</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">₽/лид</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProjects.map((project) => {
+                  const m = projectMetrics.get(project.id);
+                  if (!m) return null;
+                  return (
+                    <tr
+                      key={project.id}
+                      className="border-b border-border/50 hover:bg-muted/20 cursor-pointer"
+                      onClick={() => onNavigate(`/projects/${project.id}/dashboard`)}
+                    >
+                      <td className="px-4 py-3 font-medium">{project.name}</td>
+                      <td className="px-4 py-3 text-right">{m.callAttempts.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">{m.totalContacts.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">{m.answeredCount.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right">{m.answerRate}%</td>
+                      <td className="px-4 py-3 text-right font-semibold">{m.leads}</td>
+                      <td className="px-4 py-3 text-right">{m.totalCost > 0 ? `${m.totalCost.toLocaleString()} ₽` : "—"}</td>
+                      <td className="px-4 py-3 text-right">{m.costPerLead > 0 ? `${m.costPerLead.toLocaleString()} ₽` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        filteredProjects.map((project) => {
+          const st = allStatuses.find((s: any) => s.project_id === project.id) || ({} as Record<string, any>);
+          const m = projectMetrics.get(project.id);
+          const completedSteps = CHECKBOXES.filter((cb) => !!st[cb.key]).length;
+
+          return (
+            <div key={project.id} className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="font-semibold text-sm">{project.name}</h3>
+                  <Badge variant={st.is_active !== false ? "default" : "secondary"} className="text-[10px]">
+                    {st.is_active !== false ? "Активен" : "Выключен"}
+                  </Badge>
+                  <Badge variant="secondary" className="text-[10px]">{completedSteps}/{CHECKBOXES.length}</Badge>
+                  {(project as any).has_gck && (
+                    <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">ГЦК</Badge>
+                  )}
+                  {st.company_name && <span className="text-xs text-muted-foreground">• {st.company_name}</span>}
+                  {st.responsible && <span className="text-xs text-muted-foreground">• 👤 {st.responsible}</span>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={!!(project as any).has_gck}
+                    onCheckedChange={async (checked) => {
+                      try {
+                        await api.updateProject(project.id, { has_gck: checked });
+                        queryClient.invalidateQueries({ queryKey: ["projects"] });
+                        toast.success(checked ? "ГЦК включён" : "ГЦК выключён");
+                      } catch (err: any) {
+                        toast.error(err.message);
+                      }
+                    }}
+                  />
+                  <span className="text-[11px] text-muted-foreground">ГЦК</span>
+                  {st.analysis_link && (
+                    <a href={st.analysis_link} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onNavigate(`/projects/${project.id}/dashboard`)}>
+                    Дашборд
+                  </Button>
+                </div>
+              </div>
+              <div className="px-4 py-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {CHECKBOXES.map((cb) => {
+                    const isActive = !!st[cb.key];
+                    const isLaunched = cb.key === "launched_to_production" && isActive;
+                    return (
+                      <div
+                        key={cb.key}
+                        className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${isLaunched ? "animate-pulse" : isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                        style={isLaunched ? { backgroundColor: "rgba(34,197,94,0.15)", color: "rgb(34,197,94)" } : undefined}
+                      >
+                        {isActive ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                        {cb.label}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {m && (
+                <div className="px-4 py-4 border-t border-border/50 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+                  <div><p className="text-lg font-bold">{m.callAttempts.toLocaleString()}</p><p className="text-[11px] text-muted-foreground">Попыток вызова</p></div>
+                  <div><p className="text-lg font-bold">{m.totalContacts.toLocaleString()}</p><p className="text-[11px] text-muted-foreground">Контакты</p></div>
+                  <div><p className="text-lg font-bold">{m.answeredCount.toLocaleString()}</p><p className="text-[11px] text-muted-foreground">Дозвонились</p></div>
+                  <div><p className="text-lg font-bold">{m.answerRate}%</p><p className="text-[11px] text-muted-foreground">% дозвона</p></div>
+                  <div><p className="text-lg font-bold">{m.leads}</p><p className="text-[11px] text-muted-foreground">Лиды</p></div>
+                  <div><p className="text-lg font-bold">{m.totalCost > 0 ? `${m.totalCost.toLocaleString()} ₽` : "—"}</p><p className="text-[11px] text-muted-foreground">Стоимость</p></div>
+                  <div><p className="text-lg font-bold">{m.costPerLead > 0 ? `${m.costPerLead} ₽` : "—"}</p><p className="text-[11px] text-muted-foreground">₽/лид</p></div>
+                  <div><p className="text-lg font-bold">{m.costPerFirstContact > 0 ? `${m.costPerFirstContact} ₽` : "—"}</p><p className="text-[11px] text-muted-foreground">₽/контакт</p></div>
+                </div>
+              )}
+              {st.comment && (
+                <div className="px-4 py-2 border-t border-border/50 bg-muted/30">
+                  <p className="text-xs text-muted-foreground"><span className="font-medium">Комментарий:</span> {st.comment}</p>
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
 }
 
 export default function Admin() {
@@ -200,6 +591,14 @@ export default function Admin() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "users";
+
+  // Статистика: фильтры и вид
+  const [statsDateRange, setStatsDateRange] = useState<{ from?: Date; to?: Date }>({ from: undefined, to: undefined });
+  const [statsPreset, setStatsPreset] = useState<string>("Всё время");
+  const [statsProjectFilter, setStatsProjectFilter] = useState<string>("all");
+  const [statsResponsibleFilter, setStatsResponsibleFilter] = useState<string>("all");
+  const [statsInWorkFilter, setStatsInWorkFilter] = useState<string>("all");
+  const [statsViewMode, setStatsViewMode] = useState<"detailed" | "compact">("compact");
 
   // ---- Helpers ----
   const getUserRole = (userId: string) => users.find((u) => u.id === userId)?.role || "member";
@@ -893,158 +1292,29 @@ export default function Admin() {
 
         {/* ========== STATS TAB ========== */}
         <TabsContent value="stats" className="space-y-4">
-          {projects?.map((project, idx) => {
-            const st = allStatuses?.find((s) => s.project_id === project.id) || ({} as Record<string, any>);
-            const calls = allCalls?.filter((c) => c.project_id === project.id) || [];
-            const numbers = allNumbers?.filter((n) => n.project_id === project.id) || [];
-            const calledPhones = new Set(calls.map((c: any) => c.phone_normalized));
-            const uniqueCalls = calledPhones.size;
-            const answeredPhones = new Set<string>();
-            const leadPhones = new Set<string>();
-            for (const c of calls) {
-              if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
-              if (c.is_lead) leadPhones.add(c.phone_normalized);
-            }
-            const answered = answeredPhones.size;
-            const leads = leadPhones.size;
-            const totalCalls = calls.length;
-            const answerRate = calledPhones.size > 0 ? ((answeredPhones.size / calledPhones.size) * 100).toFixed(1) : "0";
-            const uniqueContacts = numbers.filter((n) => !n.is_duplicate_in_project).length;
-            const convCall = calledPhones.size > 0 ? ((answeredPhones.size / calledPhones.size) * 100).toFixed(1) : "0";
-            const convLead = answeredPhones.size > 0 ? ((leads / answeredPhones.size) * 100).toFixed(1) : "0";
-
-            // Costs
-            const projSuppliers = allSuppliers?.filter((s) => s.project_id === project.id) || [];
-            let costBase = 0;
-            for (const sup of projSuppliers) {
-              const numCount = numbers.filter((n: any) => n.supplier_id === sup.id).length;
-              costBase += numCount * ((sup as any).price_per_contact || 0);
-            }
-            const pricing = pricingList?.find((p) => p.project_id === project.id);
-            const minutes = calls.reduce((s: number, c: any) => s + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
-            const costMinutes = minutes * (pricing?.price_per_minute || 0);
-            const totalCost = costBase + costMinutes;
-            const costPerLead = leads > 0 ? Math.round(totalCost / leads) : 0;
-
-            const CHECKBOXES = [
-              { key: "materials_requested", label: "Материалы" },
-              { key: "materials_sent", label: "Отправлены" },
-              { key: "skillbase_ready", label: "Скиллбейз" },
-              { key: "test_launched", label: "Тест" },
-              { key: "launched_to_production", label: "В работе" },
-            ] as const;
-            const completedSteps = CHECKBOXES.filter((cb) => !!st[cb.key]).length;
-
-            return (
-              <div key={project.id} className="rounded-xl border border-border bg-card overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-semibold text-sm">{project.name}</h3>
-                    <Badge variant={st.is_active !== false ? "default" : "secondary"} className="text-[10px]">
-                      {st.is_active !== false ? "Активен" : "Выключен"}
-                    </Badge>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {completedSteps}/{CHECKBOXES.length}
-                    </Badge>
-                    {(project as any).has_gck && (
-                      <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">ГЦК</Badge>
-                    )}
-                    {st.company_name && (
-                      <span className="text-xs text-muted-foreground">• {st.company_name}</span>
-                    )}
-                    {st.responsible && (
-                      <span className="text-xs text-muted-foreground">• 👤 {st.responsible}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={!!(project as any).has_gck}
-                        onCheckedChange={async (checked) => {
-                          try {
-                            await api.updateProject(project.id, { has_gck: checked });
-                            queryClient.invalidateQueries({ queryKey: ["projects"] });
-                            toast.success(checked ? "ГЦК включён" : "ГЦК выключён");
-                          } catch (err: any) {
-                            toast.error(err.message);
-                          }
-                        }}
-                      />
-                      <span className="text-[11px] text-muted-foreground">ГЦК</span>
-                    </div>
-                    {st.analysis_link && (
-                      <a href={st.analysis_link} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate(`/projects/${project.id}/status`)}>
-                      Открыть
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Checkboxes */}
-                <div className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {CHECKBOXES.map((cb) => {
-                      const isActive = !!st[cb.key];
-                      const isLaunched = cb.key === "launched_to_production" && isActive;
-                      return (
-                        <div
-                          key={cb.key}
-                          className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${
-                            isLaunched
-                              ? "animate-pulse"
-                              : isActive
-                                ? "bg-primary/10 text-primary"
-                                : "bg-muted text-muted-foreground"
-                          }`}
-                          style={isLaunched ? { backgroundColor: "rgba(34,197,94,0.15)", color: "rgb(34,197,94)" } : undefined}
-                        >
-                          {isActive ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
-                          {cb.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Metrics — below, larger */}
-                <div className="px-4 py-4 border-t border-border/50 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <div>
-                    <p className="text-lg font-bold">{uniqueCalls.toLocaleString()}</p>
-                    <p className="text-[11px] text-muted-foreground">Уник. звонки</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold">{answered.toLocaleString()}</p>
-                    <p className="text-[11px] text-muted-foreground">Дозвон</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold">{answerRate}%</p>
-                    <p className="text-[11px] text-muted-foreground">% дозвона</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold">{leads}</p>
-                    <p className="text-[11px] text-muted-foreground">Лиды</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold">{convCall}%</p>
-                    <p className="text-[11px] text-muted-foreground">% конв. в звонок</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold">{convLead}%</p>
-                    <p className="text-[11px] text-muted-foreground">% конв. в лид</p>
-                  </div>
-                </div>
-
-                {st.comment && (
-                  <div className="px-4 py-2 border-t border-border/50 bg-muted/30">
-                    <p className="text-xs text-muted-foreground"><span className="font-medium">Комментарий:</span> {st.comment}</p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <StatsTabContent
+            projects={projects}
+            allCalls={allCalls || []}
+            allNumbers={allNumbers || []}
+            allSuppliers={allSuppliers || []}
+            allStatuses={allStatuses || []}
+            pricingList={pricingList || []}
+            statsDateRange={statsDateRange}
+            setStatsDateRange={(r) => { setStatsDateRange(r); setStatsPreset(""); }}
+            statsPreset={statsPreset}
+            setStatsPreset={setStatsPreset}
+            statsProjectFilter={statsProjectFilter}
+            setStatsProjectFilter={setStatsProjectFilter}
+            statsResponsibleFilter={statsResponsibleFilter}
+            setStatsResponsibleFilter={setStatsResponsibleFilter}
+            statsInWorkFilter={statsInWorkFilter}
+            setStatsInWorkFilter={setStatsInWorkFilter}
+            statsViewMode={statsViewMode}
+            setStatsViewMode={setStatsViewMode}
+            onNavigate={navigate}
+            queryClient={queryClient}
+            api={api}
+          />
         </TabsContent>
       </Tabs>
     </div>
