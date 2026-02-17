@@ -62,8 +62,6 @@ function StatsTabContent({
   setStatsDateRange,
   statsPreset,
   setStatsPreset,
-  statsProjectFilter,
-  setStatsProjectFilter,
   statsResponsibleFilter,
   setStatsResponsibleFilter,
   statsInWorkFilter,
@@ -84,8 +82,6 @@ function StatsTabContent({
   setStatsDateRange: (r: { from?: Date; to?: Date }) => void;
   statsPreset: string;
   setStatsPreset: (v: string) => void;
-  statsProjectFilter: string;
-  setStatsProjectFilter: (v: string) => void;
   statsResponsibleFilter: string;
   setStatsResponsibleFilter: (v: string) => void;
   statsInWorkFilter: string;
@@ -108,12 +104,8 @@ function StatsTabContent({
     return [...names].sort();
   }, [allStatuses]);
 
-  const effectiveProjectFilter = statsProjectFilter === "all" && projects?.[0] ? projects[0].id : statsProjectFilter;
   const filteredProjects = useMemo(() => {
     let list = projects;
-    if (effectiveProjectFilter && effectiveProjectFilter !== "all") {
-      list = list.filter((p) => p.id === effectiveProjectFilter);
-    }
     if (statsResponsibleFilter !== "all") {
       const byProj = new Map<string, any>();
       for (const s of allStatuses) byProj.set((s as any).project_id, s);
@@ -126,7 +118,7 @@ function StatsTabContent({
       list = list.filter((p) => !!(byProj.get(p.id) as any)?.launched_to_production === inWork);
     }
     return list;
-  }, [projects, allStatuses, effectiveProjectFilter, statsResponsibleFilter, statsInWorkFilter]);
+  }, [projects, allStatuses, statsResponsibleFilter, statsInWorkFilter]);
 
   const projectMetrics = useMemo(() => {
     const map = new Map<string, {
@@ -240,19 +232,6 @@ function StatsTabContent({
             />
           </PopoverContent>
         </Popover>
-        <Select
-          value={statsProjectFilter === "all" && projects?.[0] ? projects[0].id : statsProjectFilter}
-          onValueChange={setStatsProjectFilter}
-        >
-          <SelectTrigger className="w-48 h-8 text-xs">
-            <SelectValue placeholder="Проект" />
-          </SelectTrigger>
-          <SelectContent>
-            {projects?.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Select value={statsResponsibleFilter} onValueChange={setStatsResponsibleFilter}>
           <SelectTrigger className="w-44 h-8 text-xs">
             <SelectValue placeholder="Ответственный" />
@@ -602,7 +581,6 @@ export default function Admin() {
   // Статистика: фильтры и вид
   const [statsDateRange, setStatsDateRange] = useState<{ from?: Date; to?: Date }>({ from: undefined, to: undefined });
   const [statsPreset, setStatsPreset] = useState<string>("Всё время");
-  const [statsProjectFilter, setStatsProjectFilter] = useState<string>("all");
   const [statsResponsibleFilter, setStatsResponsibleFilter] = useState<string>("all");
   const [statsInWorkFilter, setStatsInWorkFilter] = useState<string>("all");
   const [statsViewMode, setStatsViewMode] = useState<"detailed" | "compact">("compact");
@@ -1310,8 +1288,6 @@ export default function Admin() {
             setStatsDateRange={(r) => { setStatsDateRange(r); setStatsPreset(""); }}
             statsPreset={statsPreset}
             setStatsPreset={setStatsPreset}
-            statsProjectFilter={statsProjectFilter}
-            setStatsProjectFilter={setStatsProjectFilter}
             statsResponsibleFilter={statsResponsibleFilter}
             setStatsResponsibleFilter={setStatsResponsibleFilter}
             statsInWorkFilter={statsInWorkFilter}
