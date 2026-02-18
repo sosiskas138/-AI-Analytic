@@ -301,13 +301,13 @@ export default function ProjectDashboard() {
     };
   }, [hasGck, suppliers, allNumbers, allCalls]);
 
-  // ---- Daily trend data (в том же формате: попытки и дозвоны по строкам) ----
+  // ---- Daily trend data: группировка по ЛОКАЛЬНОЙ дате (как фильтр) ----
   const dailyData = useMemo(() => {
     if (!allCalls.length) return [];
     const byDay = new Map<string, { attempts: number; answered: number; leadPhones: Set<string> }>();
     for (const c of allCalls) {
-      const day = c.call_at?.slice(0, 10);
-      if (!day) continue;
+      if (!c.call_at) continue;
+      const day = format(new Date(c.call_at), "yyyy-MM-dd");
       if (!byDay.has(day)) byDay.set(day, { attempts: 0, answered: 0, leadPhones: new Set() });
       const e = byDay.get(day)!;
       e.attempts++;
