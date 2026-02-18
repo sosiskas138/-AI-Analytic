@@ -170,7 +170,7 @@ export default function ProjectDashboard() {
     }
     const leads = leadPhones.size;
     const answerRate = attemptedPhones.size > 0 ? answerRatePercent(answeredPhones.size, attemptedPhones.size) : 0;
-    const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
+    const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + Math.ceil((Number(c.duration_seconds) || 0) / 60), 0);
     const totalContacts = attemptedPhones.size; // уникальные номера в загруженных звонках
     return { totalContacts, callAttempts, answeredCount, answerRate, leads, totalMinutes };
   }, [allCalls]);

@@ -34,7 +34,8 @@ function parseReceivedDate(raw: string): string | undefined {
   return undefined;
 }
 
-function parseDuration(raw: string): number {
+/** Парсит длительность в СЕКУНДАХ. Поддерживает: "90", "1:30" (мм:сс), "0.5" (полминуты = 30 сек). */
+function parseDurationSeconds(raw: string): number {
   const trimmed = raw.trim();
   if (!trimmed || trimmed === '0') return 0;
   if (trimmed.includes(':')) {
@@ -44,9 +45,18 @@ function parseDuration(raw: string): number {
   const num = parseFloat(trimmed);
   if (isNaN(num)) return 0;
   if (num > 0 && num < 1) {
-    return Math.round(num * 1440);
+    return Math.round(num * 60); // 0.5 = полминуты = 30 сек
   }
   return Math.round(num);
+}
+
+/** Парсит длительность в МИНУТАХ, возвращает секунды. */
+function parseDurationMinutes(raw: string): number {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === '0') return 0;
+  const num = parseFloat(trimmed.replace(',', '.'));
+  if (isNaN(num)) return 0;
+  return Math.round(num * 60);
 }
 
 // Import CSV data
@@ -173,7 +183,9 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
         if (!callAt) { errors++; continue; }
 
         const normalized = normalizePhone(phone);
-        const duration = parseDuration(row.duration_seconds || '0');
+        const duration = row.duration_minutes != null && String(row.duration_minutes).trim() !== ''
+          ? parseDurationMinutes(String(row.duration_minutes))
+          : parseDurationSeconds(row.duration_seconds || '0');
 
         callsToInsert.push({
           project_id,

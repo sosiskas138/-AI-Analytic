@@ -165,7 +165,7 @@ function StatsTabContent({
         contactsCost += numCount * ((sup as any).price_per_contact || 0);
       }
       const pricing = pricingList.find((p: any) => p.project_id === project.id);
-      const minutes = calls.reduce((s: number, c: any) => s + (c.billed_minutes || Math.ceil((c.duration_seconds || 0) / 60)), 0);
+      const minutes = calls.reduce((s: number, c: any) => s + Math.ceil((Number(c.duration_seconds) || 0) / 60), 0);
       const minutesCost = minutes * (pricing?.price_per_minute || 0);
       const totalCost = contactsCost + minutesCost;
       const costPerLead = leads > 0 ? Math.round(totalCost / leads) : 0;
