@@ -53,6 +53,45 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Диагностика БД: подключение и количество записей в таблицах
+app.get('/api/debug/db', async (_req, res) => {
+  const hasUrl = !!process.env.DATABASE_URL;
+  const urlSafe = process.env.DATABASE_URL
+    ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')
+    : null;
+  try {
+    await query('SELECT 1');
+    const tables = [
+      'users',
+      'projects',
+      'project_members',
+      'suppliers',
+      'supplier_numbers',
+      'calls',
+      'import_jobs',
+      'reanimation_exports',
+    ];
+    const counts: Record<string, number> = {};
+    for (const table of tables) {
+      const r = await query(`SELECT COUNT(*)::int as c FROM ${table}`);
+      counts[table] = Number((r.rows[0] as { c: number }).c);
+    }
+    res.json({
+      connected: true,
+      database_url_set: hasUrl,
+      database_url_preview: urlSafe,
+      tables: counts,
+    });
+  } catch (e: any) {
+    res.status(500).json({
+      connected: false,
+      database_url_set: hasUrl,
+      database_url_preview: urlSafe,
+      error: e?.message || String(e),
+    });
+  }
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);

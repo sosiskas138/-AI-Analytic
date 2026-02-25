@@ -170,7 +170,12 @@ export default function ProjectDashboard() {
     }
     const leads = leadPhones.size;
     const answerRate = attemptedPhones.size > 0 ? answerRatePercent(answeredPhones.size, attemptedPhones.size) : 0;
-    const totalMinutes = allCalls.reduce((sum: number, c: any) => sum + Math.ceil((Number(c.duration_seconds) || 0) / 60), 0);
+    // Минуты только у звонков со статусом «Успешный» (для стоимости минут)
+    const totalMinutes = allCalls.reduce(
+      (sum: number, c: any) =>
+        isStatusSuccessful(c.status) ? sum + Math.ceil((Number(c.duration_seconds) || 0) / 60) : sum,
+      0
+    );
     const totalContacts = attemptedPhones.size; // уникальные номера в загруженных звонках
     return { totalContacts, callAttempts, answeredCount, answerRate, leads, totalMinutes };
   }, [allCalls]);
@@ -440,7 +445,7 @@ export default function ProjectDashboard() {
         <p className="text-[11px] font-semibold text-primary/70 uppercase tracking-wider mb-3">Финансы</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <KPICard title="Стоимость контактов" value={finance.contactsCost > 0 ? finance.contactsCost.toLocaleString() : "—"} icon={DollarSign} delay={0.15} info="Сумма стоимости контакта по каждому поставщику" />
-          <KPICard title="Стоимость минут" value={finance.minutesCost > 0 ? finance.minutesCost.toLocaleString() : "—"} icon={DollarSign} delay={0.2} info="Минуты × Цена за минуту" />
+          <KPICard title="Стоимость минут" value={finance.minutesCost > 0 ? finance.minutesCost.toLocaleString() : "—"} icon={DollarSign} delay={0.2} info="Минуты (только звонки со статусом «Успешный») × Цена за минуту" />
           <KPICard title="Общая стоимость" value={finance.totalCost > 0 ? finance.totalCost.toLocaleString() : "—"} icon={DollarSign} delay={0.25} info="Стоимость контактов + Стоимость минут" />
           <KPICard title="Стоимость первого контакта" value={finance.costPerFirstContact > 0 ? finance.costPerFirstContact.toFixed(0) : "—"} icon={DollarSign} delay={0.28} info="Общая стоимость / Дозвонились" />
           <KPICard title="CPL" value={finance.costPerLead > 0 ? finance.costPerLead.toFixed(0) : "—"} icon={Target} delay={0.3} info="Cost Per Lead = Общая стоимость / Лиды" />

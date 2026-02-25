@@ -148,7 +148,11 @@ export default function AdminProjectStatuses() {
     const answered = answeredPhones.size;
     const leads = leadPhones.size;
     const answerRate = calledPhones.size > 0 ? ((answered / calledPhones.size) * 100).toFixed(1) : "0";
-    const minutes = calls.reduce((s, c) => s + Math.ceil((Number(c.duration_seconds) || 0) / 60), 0);
+    const minutes = calls.reduce(
+      (s, c) =>
+        isStatusSuccessful(c.status) ? s + Math.ceil((Number(c.duration_seconds) || 0) / 60) : s,
+      0
+    );
 
     // Конверсия в звонок (успешный): дозвонились / прозвонено
     const convCall = calledPhones.size > 0 ? ((answered / calledPhones.size) * 100).toFixed(1) : "0";
