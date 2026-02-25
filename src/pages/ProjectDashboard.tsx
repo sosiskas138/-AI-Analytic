@@ -170,10 +170,9 @@ export default function ProjectDashboard() {
     }
     const leads = leadPhones.size;
     const answerRate = attemptedPhones.size > 0 ? answerRatePercent(answeredPhones.size, attemptedPhones.size) : 0;
-    // Минуты только у звонков со статусом «Успешный» (для стоимости минут)
+    // Минуты только со статусом «Успешный»
     const totalMinutes = allCalls.reduce(
-      (sum: number, c: any) =>
-        isStatusSuccessful(c.status) ? sum + Math.ceil((Number(c.duration_seconds) || 0) / 60) : sum,
+      (sum, c) => (isStatusSuccessful(c.status) ? sum + Math.ceil((Number(c.duration_seconds) || 0) / 60) : sum),
       0
     );
     const totalContacts = attemptedPhones.size; // уникальные номера в загруженных звонках
