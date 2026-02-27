@@ -58,8 +58,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const userResult = await query(
-      `SELECT u.id, u.email, p.full_name, 
-       COALESCE((SELECT role FROM user_roles WHERE user_id = u.id LIMIT 1), 'member') as role
+      `SELECT u.id, u.email, p.full_name
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
        WHERE u.id = $1`,
@@ -75,7 +74,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
       id: user.id,
       email: user.email,
       full_name: user.full_name || '',
-      role: user.role,
+      role: req.user!.role,
+      can_manage_bases: req.user!.canManageBases,
     });
   } catch (error: any) {
     console.error('Get user error:', error);

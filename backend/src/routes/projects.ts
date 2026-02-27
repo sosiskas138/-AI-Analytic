@@ -174,10 +174,18 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res) => {
       [trimmedName, description || '']
     );
 
+    const projectId = result.rows[0].id;
+
     // Add creator as member
     await query(
       'INSERT INTO project_members (project_id, user_id) VALUES ($1, $2)',
-      [result.rows[0].id, req.user!.userId]
+      [projectId, req.user!.userId]
+    );
+
+    // Default price per minute = 12
+    await query(
+      'INSERT INTO project_pricing (project_id, price_per_number, price_per_call, price_per_minute) VALUES ($1, 0, 0, 12)',
+      [projectId]
     );
 
     res.status(201).json(result.rows[0]);
@@ -187,17 +195,24 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   }
 });
 
-// Update project (admin only)
-router.put('/:projectId', authenticate, requireAdmin, async (req, res) => {
+// Update project (admin: name, description, has_gck; user with "Базы": only has_gck for own projects)
+router.put('/:projectId', authenticate, requireProjectAccess, async (req: AuthRequest, res) => {
   try {
     const { projectId } = req.params;
     const { name, description, has_gck } = req.body;
+
+    const isAdmin = req.user!.isAdmin;
+    const canManageBases = req.user!.canManageBases;
+    const canUpdateHasGck = isAdmin || canManageBases;
+    if (!isAdmin && !canManageBases) {
+      return res.status(403).json({ error: 'Forbidden: No permission to update project' });
+    }
 
     const updates: string[] = [];
     const values: any[] = [];
     let paramCount = 1;
 
-    if (name !== undefined) {
+    if (isAdmin && name !== undefined) {
       const trimmedName = String(name).trim();
       const existing = await query(
         'SELECT id FROM projects WHERE LOWER(TRIM(name)) = LOWER($1) AND id != $2',
@@ -209,11 +224,11 @@ router.put('/:projectId', authenticate, requireAdmin, async (req, res) => {
       updates.push(`name = $${paramCount++}`);
       values.push(trimmedName);
     }
-    if (description !== undefined) {
+    if (isAdmin && description !== undefined) {
       updates.push(`description = $${paramCount++}`);
       values.push(description);
     }
-    if (has_gck !== undefined) {
+    if (canUpdateHasGck && has_gck !== undefined) {
       updates.push(`has_gck = $${paramCount++}`);
       values.push(has_gck);
     }
@@ -356,9 +371,12 @@ router.get('/:projectId/pricing', authenticate, requireProjectAccess, async (req
   }
 });
 
-// Update project pricing (admin only)
-router.put('/:projectId/pricing', authenticate, requireAdmin, async (req, res) => {
+// Update project pricing (admin or user with "Базы" for own projects)
+router.put('/:projectId/pricing', authenticate, requireProjectAccess, async (req: AuthRequest, res) => {
   try {
+    if (!req.user!.isAdmin && !req.user!.canManageBases) {
+      return res.status(403).json({ error: 'Forbidden: No permission to update pricing' });
+    }
     const { price_per_number, price_per_call, price_per_minute } = req.body;
 
     const result = await query(

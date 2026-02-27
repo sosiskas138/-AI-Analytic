@@ -101,14 +101,14 @@ class ApiClient {
     return this.request<{ users: any[] }>('/users');
   }
 
-  async createUser(data: { login: string; password: string; full_name?: string; role?: string }) {
+  async createUser(data: { login: string; password: string; full_name?: string; role?: string; can_manage_bases?: boolean }) {
     return this.request('/users', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async updateUser(userId: string, data: { login?: string; password?: string; full_name?: string }) {
+  async updateUser(userId: string, data: { login?: string; password?: string; full_name?: string; can_manage_bases?: boolean }) {
     return this.request(`/users/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -334,6 +334,36 @@ class ApiClient {
   async deleteReanimationExport(exportId: string) {
     return this.request(`/reanimation/exports/${exportId}`, {
       method: 'DELETE',
+    });
+  }
+
+  // Statistics (company dashboard)
+  async getCompanyStatistics(params?: {
+    fromDate?: string;
+    toDate?: string;
+    projectId?: string;
+    activeOnly?: boolean;
+    groupBy?: 'day' | 'week' | 'month';
+  }) {
+    const q = new URLSearchParams();
+    if (params?.fromDate) q.append('fromDate', params.fromDate);
+    if (params?.toDate) q.append('toDate', params.toDate);
+    if (params?.projectId) q.append('projectId', params.projectId);
+    if (params?.activeOnly === true) q.append('activeOnly', 'true');
+    if (params?.groupBy) q.append('groupBy', params.groupBy);
+    const qs = q.toString();
+    return this.request<any>(`/statistics/company${qs ? `?${qs}` : ''}`);
+  }
+
+  // Settings (monetary indicators, CPL targets — admin)
+  async getSettings() {
+    return this.request<{ cpl_target_a: string; cpl_target_b: string; cpl_target_c: string }>('/settings');
+  }
+
+  async updateSettings(data: { cpl_target_a?: number; cpl_target_b?: number; cpl_target_c?: number }) {
+    return this.request<{ cpl_target_a: string; cpl_target_b: string; cpl_target_c: string }>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
     });
   }
 

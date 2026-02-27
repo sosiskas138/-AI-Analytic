@@ -61,6 +61,7 @@ export function AppSidebar({ projectId, onNavigate }: SidebarProps) {
   });
   const mainNav = [
     { to: "/projects", icon: FolderKanban, label: "Проекты" },
+    ...(isAdmin ? [{ to: "/statistics", icon: BarChart3, label: "Статистика" }] : []),
     ...(isAdmin ? [{ to: "/reanimation", icon: RefreshCw, label: "Реанимация" }] : []),
     ...(isAdmin ? [{ to: "/admin", icon: Settings, label: "Админка" }] : []),
   ];
@@ -70,8 +71,7 @@ export function AppSidebar({ projectId, onNavigate }: SidebarProps) {
         { to: "/admin?tab=users", icon: Users, label: "Пользователи" },
         { to: "/admin?tab=responsible", icon: UserCheck, label: "Ответственные" },
         { to: "/admin?tab=suppliers", icon: Package, label: "Поставщики" },
-        { to: "/admin?tab=pricing", icon: DollarSign, label: "Цены" },
-        { to: "/admin?tab=stats", icon: BarChart3, label: "Статистика" },
+        { to: "/admin?tab=pricing", icon: DollarSign, label: "Денежные показатели" },
       ]
     : [];
 

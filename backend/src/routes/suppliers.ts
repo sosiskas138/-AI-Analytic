@@ -35,9 +35,9 @@ router.post('/', authenticate, requireProjectAccess, requireCanCreateSuppliers, 
       return res.status(400).json({ error: 'Project ID and name are required' });
     }
 
-    const isAdmin = req.user?.isAdmin;
-    const price = isAdmin ? (price_per_contact ?? 0) : 0;
-    const gck = isAdmin ? (is_gck ?? false) : false;
+    const canSetPriceAndGck = req.user?.isAdmin || req.user?.canManageBases;
+    const price = canSetPriceAndGck ? (price_per_contact ?? 0) : 0;
+    const gck = canSetPriceAndGck ? (is_gck ?? false) : false;
 
     const result = await query(
       `INSERT INTO suppliers (project_id, name, tag, price_per_contact, is_gck)
@@ -68,14 +68,14 @@ router.put('/:supplierId', authenticate, async (req: AuthRequest, res) => {
     }
     const projectId = supplierCheck.rows[0].project_id;
 
-    const isAdmin = req.user?.isAdmin;
-    let canEdit = isAdmin;
-    if (!isAdmin) {
+    const canSetPriceAndGck = req.user?.isAdmin || req.user?.canManageBases;
+    let canEdit = req.user?.isAdmin;
+    if (!canEdit) {
       const pm = await query(
         'SELECT COALESCE(can_create_suppliers, false) as can FROM project_members WHERE user_id = $1 AND project_id = $2',
         [req.user!.userId, projectId]
       );
-      canEdit = pm.rows.length > 0 && pm.rows[0].can;
+      canEdit = pm.rows.length > 0 && (pm.rows[0].can || canSetPriceAndGck);
     }
 
     if (!canEdit) {
@@ -94,11 +94,11 @@ router.put('/:supplierId', authenticate, async (req: AuthRequest, res) => {
       updates.push(`tag = $${paramCount++}`);
       values.push(tag);
     }
-    if (isAdmin && price_per_contact !== undefined) {
+    if (canSetPriceAndGck && price_per_contact !== undefined) {
       updates.push(`price_per_contact = $${paramCount++}`);
       values.push(price_per_contact);
     }
-    if (isAdmin && is_gck !== undefined) {
+    if (canSetPriceAndGck && is_gck !== undefined) {
       updates.push(`is_gck = $${paramCount++}`);
       values.push(is_gck);
     }
@@ -120,19 +120,32 @@ router.put('/:supplierId', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// Delete supplier (admin only)
-router.delete('/:supplierId', authenticate, requireAdmin, async (req, res) => {
+// Delete supplier (admin or user with "Базы" for that project)
+router.delete('/:supplierId', authenticate, async (req: AuthRequest, res) => {
   try {
     const { supplierId } = req.params;
-    
-    // Verify supplier exists
-    const supplierCheck = await query('SELECT id FROM suppliers WHERE id = $1', [supplierId]);
+
+    const supplierCheck = await query('SELECT id, project_id FROM suppliers WHERE id = $1', [supplierId]);
     if (supplierCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Supplier not found' });
     }
-    
-    // Delete supplier (CASCADE will automatically delete supplier_numbers)
-    // Also need to set supplier_number_id to NULL in calls that reference deleted supplier_numbers
+    const projectId = supplierCheck.rows[0].project_id;
+
+    const isAdmin = req.user?.isAdmin;
+    const canManageBases = req.user?.canManageBases;
+    if (!isAdmin) {
+      if (!canManageBases) {
+        return res.status(403).json({ error: 'Forbidden: No permission to delete bases' });
+      }
+      const pm = await query(
+        'SELECT 1 FROM project_members WHERE user_id = $1 AND project_id = $2',
+        [req.user!.userId, projectId]
+      );
+      if (pm.rows.length === 0) {
+        return res.status(403).json({ error: 'Forbidden: No access to this project' });
+      }
+    }
+
     await query(
       `UPDATE calls SET supplier_number_id = NULL 
        WHERE supplier_number_id IN (
@@ -140,10 +153,8 @@ router.delete('/:supplierId', authenticate, requireAdmin, async (req, res) => {
        )`,
       [supplierId]
     );
-    
-    // Delete supplier (CASCADE will delete supplier_numbers)
     await query('DELETE FROM suppliers WHERE id = $1', [supplierId]);
-    
+
     res.json({ message: 'Supplier deleted successfully' });
   } catch (error: any) {
     console.error('Delete supplier error:', error);

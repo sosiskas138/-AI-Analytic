@@ -15,7 +15,7 @@ export const ALL_TABS = [
 export type TabKey = (typeof ALL_TABS)[number]["key"];
 
 export function useProjectAccess(projectId?: string) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, canManageBases } = useAuth();
 
   const { data: membersData } = useQuery({
     queryKey: ["project-membership", projectId, user?.id],
@@ -35,7 +35,7 @@ export function useProjectAccess(projectId?: string) {
   }
 
   const allowedTabs = (membersData?.allowed_tabs as TabKey[]) || [];
-  const canCreateSuppliers = !!(membersData as any)?.can_create_suppliers;
+  const canCreateSuppliers = !!(membersData as any)?.can_create_suppliers || !!canManageBases;
 
   return {
     allowedTabs,

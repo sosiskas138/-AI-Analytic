@@ -9,6 +9,8 @@ import suppliersRoutes from './routes/suppliers.js';
 import importsRoutes from './routes/imports.js';
 import importCsvRoutes from './routes/import-csv.js';
 import reanimationRoutes from './routes/reanimation.js';
+import statisticsRoutes from './routes/statistics.js';
+import settingsRoutes from './routes/settings.js';
 import { query } from './config/database.js';
 import { hashPassword } from './config/auth.js';
 
@@ -101,6 +103,8 @@ app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/imports', importsRoutes);
 app.use('/api/import-csv', importCsvRoutes);
 app.use('/api/reanimation', reanimationRoutes);
+app.use('/api/statistics', statisticsRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // 404 handler (return JSON so frontend never gets HTML error page)
 app.use((_req, res) => {

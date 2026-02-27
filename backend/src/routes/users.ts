@@ -10,12 +10,17 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const result = await query(
       `SELECT u.id, u.email, p.full_name,
-       COALESCE((SELECT role FROM user_roles WHERE user_id = u.id LIMIT 1), 'member') as role
+       COALESCE((SELECT role FROM user_roles WHERE user_id = u.id AND role = 'admin' LIMIT 1), (SELECT role FROM user_roles WHERE user_id = u.id LIMIT 1), 'member') as role,
+       EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'bases') as can_manage_bases
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
        ORDER BY u.created_at DESC`
     );
-    res.json({ users: result.rows });
+    const users = result.rows.map((row: any) => ({
+      ...row,
+      can_manage_bases: !!row.can_manage_bases,
+    }));
+    res.json({ users });
   } catch (error: any) {
     console.error('Get users error:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -64,6 +69,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         [user.id, role]
       );
     }
+    const canManageBases = req.body.can_manage_bases === true;
+    if (canManageBases) {
+      await query(
+        'INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT (user_id, role) DO NOTHING',
+        [user.id, 'bases']
+      );
+    }
 
     res.json({ user_id: user.id });
   } catch (error: any) {
@@ -76,7 +88,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 router.put('/:userId', authenticate, requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
-    const { login, password, full_name } = req.body;
+    const { login, password, full_name, can_manage_bases } = req.body;
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -107,6 +119,18 @@ router.put('/:userId', authenticate, requireAdmin, async (req, res) => {
         'UPDATE profiles SET full_name = $1 WHERE user_id = $2',
         [full_name, userId]
       );
+    }
+
+    if (typeof can_manage_bases === 'boolean') {
+      const hasBases = await query(
+        'SELECT 1 FROM user_roles WHERE user_id = $1 AND role = $2',
+        [userId, 'bases']
+      );
+      if (can_manage_bases && hasBases.rows.length === 0) {
+        await query('INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT (user_id, role) DO NOTHING', [userId, 'bases']);
+      } else if (!can_manage_bases && hasBases.rows.length > 0) {
+        await query('DELETE FROM user_roles WHERE user_id = $1 AND role = $2', [userId, 'bases']);
+      }
     }
 
     res.json({ message: 'User updated successfully' });

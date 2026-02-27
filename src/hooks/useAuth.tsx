@@ -6,12 +6,14 @@ interface User {
   email: string;
   full_name?: string;
   role?: string;
+  can_manage_bases?: boolean;
 }
 
 interface AuthContextType {
   session: { user: User } | null;
   user: User | null;
   isAdmin: boolean;
+  canManageBases: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -20,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
   isAdmin: false,
+  canManageBases: false,
   loading: true,
   signOut: async () => {},
 });
@@ -30,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<{ user: User } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canManageBases, setCanManageBases] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,11 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setSession({ user });
           setIsAdmin(user.role === 'admin');
+          setCanManageBases(!!user.can_manage_bases);
         }
       } catch (error) {
         if (!cancelled) {
           setSession(null);
           setIsAdmin(false);
+          setCanManageBases(false);
           localStorage.removeItem('auth_token');
         }
       } finally {
@@ -84,11 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setSession(null);
     setIsAdmin(false);
+    setCanManageBases(false);
     localStorage.removeItem('auth_token');
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, isAdmin, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, isAdmin, canManageBases, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,14 +1,18 @@
-import { Outlet, useParams } from "react-router-dom";
+import { Outlet, useParams, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useState } from "react";
-import { Menu } from "lucide-react";
+import { Menu, ArrowLeft } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 export default function DashboardLayout() {
   const { projectId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const fromStatistics = location.state?.from === "/statistics";
 
   return (
     <div className="flex min-h-screen w-full">
@@ -30,6 +34,19 @@ export default function DashboardLayout() {
 
         <main className="flex-1">
           <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+            {projectId && fromStatistics && (
+              <div className="mb-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 -ml-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => navigate("/statistics")}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Назад к статистике
+                </Button>
+              </div>
+            )}
             <Outlet />
           </div>
         </main>

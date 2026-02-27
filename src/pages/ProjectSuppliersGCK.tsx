@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Loader2, CalendarIcon, Phone, Target, PhoneCall, TrendingUp, Users, DollarSign, ShieldCheck, Plus } from "lucide-react";
+import { Loader2, CalendarIcon, Phone, Target, PhoneCall, TrendingUp, Users, DollarSign, ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { KPICard } from "@/components/KPICard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,21 +20,35 @@ import {
 import { isStatusSuccessful } from "@/lib/utils";
 import { callRatePercent, answerRatePercent, conversionRatePercent } from "@/lib/calculations";
 import { useProjectAccess } from "@/hooks/useProjectAccess";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+
+function filterNumericInput(value: string): string {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const parts = cleaned.split(".");
+  return parts.length > 2 ? parts.slice(0, 2).join(".") : cleaned;
+}
 
 export default function ProjectSuppliersGCK() {
   const { projectId } = useParams();
   const queryClient = useQueryClient();
   const { canCreateSuppliers } = useProjectAccess(projectId);
+  const { isAdmin, canManageBases } = useAuth();
+  const canEditPricesAndGck = isAdmin || canManageBases;
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [selectedSupplier, setSelectedSupplier] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [newBaseName, setNewBaseName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [supplierPrices, setSupplierPrices] = useState<Record<string, string>>({});
+  const [projectPricePerMinute, setProjectPricePerMinute] = useState("");
+  const [savingPricing, setSavingPricing] = useState(false);
+  const [deletingSupplierId, setDeletingSupplierId] = useState<string | null>(null);
 
   // Fetch suppliers - все поставщики (Базы = все базы)
   const { data: suppliers } = useQuery({
@@ -87,7 +101,81 @@ export default function ProjectSuppliersGCK() {
     staleTime: 30000, // Cache for 30 seconds
   });
 
-  // No longer need project-level pricing - using per-supplier pricing
+  const { data: project } = useQuery({
+    queryKey: ["project-detail", projectId],
+    queryFn: () => api.getProject(projectId!),
+    enabled: !!projectId && canEditPricesAndGck,
+  });
+  const { data: projectPricing } = useQuery({
+    queryKey: ["project-pricing", projectId],
+    queryFn: () => api.getProjectPricing(projectId!),
+    enabled: !!projectId && canEditPricesAndGck,
+  });
+
+  const projectHasGck = !!(project as any)?.has_gck;
+  const displayPricePerMinute = projectPricePerMinute !== "" ? projectPricePerMinute : String(projectPricing?.price_per_minute ?? 0);
+
+  const saveSupplierPrice = async (supplierId: string) => {
+    const val = supplierPrices[supplierId] ?? String((suppliers?.find((s) => s.id === supplierId) as any)?.price_per_contact ?? 0);
+    try {
+      await api.updateSupplier(supplierId, { price_per_contact: parseFloat(val) || 0 });
+      toast.success("Цена сохранена");
+      queryClient.invalidateQueries({ queryKey: ["suppliers-base", projectId] });
+    } catch (err: any) {
+      toast.error(err?.message || "Ошибка");
+    }
+  };
+
+  const toggleSupplierGck = async (supplierId: string, current: boolean) => {
+    try {
+      await api.updateSupplier(supplierId, { is_gck: !current });
+      toast.success(!current ? "ГЦК включён" : "ГЦК выключен");
+      queryClient.invalidateQueries({ queryKey: ["suppliers-base", projectId] });
+    } catch (err: any) {
+      toast.error(err?.message || "Ошибка");
+    }
+  };
+
+  const toggleProjectHasGck = async (checked: boolean) => {
+    if (!projectId) return;
+    try {
+      await api.updateProject(projectId, { has_gck: checked });
+      toast.success(checked ? "ГЦК включён для проекта" : "ГЦК выключен для проекта");
+      queryClient.invalidateQueries({ queryKey: ["project-detail", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Ошибка");
+    }
+  };
+
+  const saveProjectPricing = async () => {
+    if (!projectId) return;
+    setSavingPricing(true);
+    try {
+      await api.updateProjectPricing(projectId, { price_per_minute: parseFloat(displayPricePerMinute) || 0 });
+      toast.success("Цена за минуту сохранена");
+      queryClient.invalidateQueries({ queryKey: ["project-pricing", projectId] });
+    } catch (err: any) {
+      toast.error(err?.message || "Ошибка");
+    } finally {
+      setSavingPricing(false);
+    }
+  };
+
+  const deleteSupplier = async (supplierId: string) => {
+    if (!confirm("Удалить эту базу? Номера и привязки в звонках будут сохранены.")) return;
+    setDeletingSupplierId(supplierId);
+    try {
+      await api.deleteSupplier(supplierId);
+      toast.success("База удалена");
+      queryClient.invalidateQueries({ queryKey: ["suppliers-base", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers", projectId] });
+    } catch (err: any) {
+      toast.error(err?.message || "Ошибка");
+    } finally {
+      setDeletingSupplierId(null);
+    }
+  };
 
   const report = useMemo(() => {
     if (!suppliers || !supplierNumbers || !calls) return [];
@@ -320,6 +408,81 @@ export default function ProjectSuppliersGCK() {
         </>
         )}
       </div>
+
+      {canEditPricesAndGck && (
+        <div className="rounded-xl border border-border bg-card p-4 space-y-6 mb-8">
+          <h3 className="font-semibold text-sm">Настройки</h3>
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={projectHasGck}
+                onCheckedChange={toggleProjectHasGck}
+                id="project-has-gck"
+              />
+              <label htmlFor="project-has-gck" className="text-sm cursor-pointer">Включить ГЦК для проекта</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Цена за минуту, ₽</label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={displayPricePerMinute}
+                  onChange={(e) => setProjectPricePerMinute(filterNumericInput(e.target.value))}
+                  className="h-9 w-28 text-sm"
+                />
+              </div>
+              <Button size="sm" onClick={saveProjectPricing} disabled={savingPricing} className="mt-6">
+                {savingPricing ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Цены по базам {projectHasGck && "· ГЦК"}</p>
+            {suppliers && suppliers.length > 0 ? (
+              <div className="space-y-2 max-h-56 overflow-y-auto">
+                {suppliers.map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-2 last:border-0">
+                    <span className="text-sm font-medium min-w-[120px] truncate">{s.name}</span>
+                    {projectHasGck && (
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          checked={!!(s as any).is_gck}
+                          onCheckedChange={() => toggleSupplierGck(s.id, !!(s as any).is_gck)}
+                          id={`gck-${s.id}`}
+                        />
+                        <label htmlFor={`gck-${s.id}`} className="text-[10px] text-muted-foreground whitespace-nowrap">ГЦК</label>
+                      </div>
+                    )}
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="₽/контакт"
+                      value={supplierPrices[s.id] ?? String((s as any).price_per_contact ?? 0)}
+                      onChange={(e) => setSupplierPrices((prev) => ({ ...prev, [s.id]: filterNumericInput(e.target.value) }))}
+                      onBlur={() => saveSupplierPrice(s.id)}
+                      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                      className="h-8 w-24 text-xs"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => deleteSupplier(s.id)}
+                      disabled={deletingSupplierId === s.id}
+                      title="Удалить базу"
+                    >
+                      {deletingSupplierId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Нет баз в проекте</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">

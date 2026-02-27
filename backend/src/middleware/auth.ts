@@ -8,6 +8,7 @@ export interface AuthRequest extends Request {
     email: string;
     role?: string;
     isAdmin: boolean;
+    canManageBases: boolean;
   };
 }
 
@@ -21,17 +22,21 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     const token = authHeader.substring(7);
     const payload = verifyToken(token);
 
-    // Get user role from database
+    // Get all user roles from database
     const roleResult = await query(
-      'SELECT role FROM user_roles WHERE user_id = $1 LIMIT 1',
+      'SELECT role FROM user_roles WHERE user_id = $1',
       [payload.userId]
     );
+    const roles = (roleResult.rows as { role: string }[]).map((r) => r.role);
+    const isAdmin = roles.includes('admin');
+    const canManageBases = roles.includes('bases');
 
     req.user = {
       userId: payload.userId,
       email: payload.email,
-      role: roleResult.rows[0]?.role,
-      isAdmin: roleResult.rows[0]?.role === 'admin',
+      role: roles.includes('admin') ? 'admin' : roles.includes('bases') ? 'bases' : (roles[0] || 'member'),
+      isAdmin,
+      canManageBases: isAdmin || canManageBases,
     };
 
     next();
@@ -75,12 +80,12 @@ export async function requireProjectAccess(req: AuthRequest, res: Response, next
   next();
 }
 
-/** Requires project access AND can_create_suppliers (or admin). Use after requireProjectAccess. */
+/** Requires project access AND (admin OR canManageBases OR can_create_suppliers). Use after requireProjectAccess. */
 export async function requireCanCreateSuppliers(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  if (req.user.isAdmin) {
+  if (req.user.isAdmin || req.user.canManageBases) {
     return next();
   }
   const projectId = req.params.projectId || req.body.project_id;

@@ -19,6 +19,7 @@ import Admin from "@/pages/Admin";
 import AdminProjectStatuses from "@/pages/AdminProjectStatuses";
 import ProjectStatus from "@/pages/ProjectStatus";
 import Reanimation from "@/pages/Reanimation";
+import Statistics from "@/pages/Statistics";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/admin" element={<Admin />} />
               <Route path="/admin/project-statuses" element={<AdminProjectStatuses />} />
               <Route path="/reanimation" element={<Reanimation />} />
+              <Route path="/statistics" element={<Statistics />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
