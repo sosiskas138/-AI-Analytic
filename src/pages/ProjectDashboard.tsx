@@ -171,7 +171,7 @@ export default function ProjectDashboard() {
     const leads = leadPhones.size;
     const answerRate = attemptedPhones.size > 0 ? answerRatePercent(answeredPhones.size, attemptedPhones.size) : 0;
     const answeredUnique = answeredPhones.size;
-    const leadConversionPercent = answeredUnique > 0 ? (leads / answeredUnique) * 100 : 0;
+    const leadConversionPercent = answeredUnique > 0 ? Math.round((leads / answeredUnique) * 10000) / 100 : 0;
     // Минуты только со статусом «Успешный»
     const totalMinutes = allCalls.reduce(
       (sum, c) => (isStatusSuccessful(c.status) ? sum + Math.ceil((Number(c.duration_seconds) || 0) / 60) : sum),
@@ -403,7 +403,7 @@ export default function ProjectDashboard() {
           <KPICard title="Дозвонились" value={metrics.answeredCount.toLocaleString()} icon={PhoneCall} delay={0.1} info="Звонки со статусом «Успешный» (все попытки с дублями)" />
           <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Уникальные дозвоны / Уникальные попытки × 100%" />
           <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Target} delay={0.2} info="Уникальные номера, отмеченные как лид" valueClassName="text-success" />
-          <KPICard title="В лид из дозвона" value={metrics.answeredUnique > 0 ? `${metrics.leadConversionPercent.toFixed(1)}%` : "—"} icon={TrendingUp} delay={0.22} info="Конверсия в лид из тех, кому дозвонились: уникальные лиды / уникальные дозвоны × 100%" />
+          <KPICard title="В лид из дозвона" value={metrics.answeredUnique > 0 ? `${metrics.leadConversionPercent.toFixed(2)}%` : "—"} icon={TrendingUp} delay={0.22} info="Конверсия в лид из тех, кому дозвонились: уникальные лиды / уникальные дозвоны × 100%" />
         </div>
 
         {/* Daily trend chart */}
