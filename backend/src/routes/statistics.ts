@@ -84,6 +84,8 @@ router.get('/company', authenticate, async (req: AuthRequest, res) => {
       allProjectIds = [...projectIds];
     }
 
+    const hasDateFilter = !!(fromDate || toDate);
+
     if (allProjectIds.length === 0) {
       return res.json({
         summary: { totalMinutes: 0, projectCount: projectIds.length, totalMinutesCost: 0, totalContactsCost: 0, totalCost: 0, avgCostPerMinute: 0 },
@@ -178,19 +180,22 @@ router.get('/company', authenticate, async (req: AuthRequest, res) => {
       const leads = leadsByProject[pid] || 0;
       const pricePerMinute = pricingByProject[pid]?.price_per_minute ?? 0;
       const minutesCost = Math.round(minutes * pricePerMinute * 100) / 100;
-      const contactsCost = Math.round((contactsCostByProject[pid] ?? 0) * 100) / 100;
-      const cost = Math.round((contactsCost + minutesCost) * 100) / 100;
+      // При выбранном периоде учитываем стоимость контактов только у проектов с активностью (звонками) в этом периоде
+      const rawContactsCost = contactsCostByProject[pid] ?? 0;
+      const contactsCost = (hasDateFilter && minutes === 0 ? 0 : rawContactsCost);
+      const contactsCostRounded = Math.round(contactsCost * 100) / 100;
+      const cost = Math.round((contactsCostRounded + minutesCost) * 100) / 100;
       totalMinutes += minutes;
       totalCost += cost;
       totalMinutesCost += minutesCost;
-      totalContactsCost += contactsCost;
+      totalContactsCost += contactsCostRounded;
       byProject.push({
         projectId: pid,
         projectName: projectNames[pid] || '—',
         minutes: Math.round(minutes),
         leads,
         minutesCost,
-        contactsCost,
+        contactsCost: contactsCostRounded,
         cost,
         costPerMinute: minutes > 0 ? Math.round((cost / minutes) * 100) / 100 : 0,
         cpl: leads > 0 ? Math.round((cost / leads) * 100) / 100 : 0,
