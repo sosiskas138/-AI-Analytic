@@ -144,11 +144,15 @@ export default function ProjectCalls() {
     const calledPhones = new Set(filtered.map((c) => c.phone_normalized));
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
+    let answeredCount = 0;
     for (const c of filtered) {
-      if (isStatusSuccessful(c.status)) answeredPhones.add(c.phone_normalized);
+      if (isStatusSuccessful(c.status)) {
+        answeredCount++;
+        answeredPhones.add(c.phone_normalized);
+      }
       if (c.is_lead) leadPhones.add(c.phone_normalized);
     }
-    const answered = answeredPhones.size;
+    const answered = answeredCount;
     const leads = leadPhones.size;
     const answerRate = calledPhones.size > 0 ? (answeredPhones.size / calledPhones.size) * 100 : 0;
     const avgDuration = total > 0 ? filtered.reduce((s, c) => s + c.duration_seconds, 0) / total : 0;

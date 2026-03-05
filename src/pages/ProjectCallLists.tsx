@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Loader2, CalendarIcon, Phone, Target, PhoneCall, TrendingUp, DollarSign } from "lucide-react";
+import { Loader2, CalendarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { KPICard } from "@/components/KPICard";
+
 import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -47,6 +47,33 @@ export default function ProjectSuppliers() {
     enabled: !!projectId,
   });
 
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers", projectId],
+    queryFn: async () => {
+      const response = await api.getSuppliers(projectId!);
+      return response.suppliers || [];
+    },
+    enabled: !!projectId,
+  });
+
+  const { data: supplierNumbers } = useQuery({
+    queryKey: ["supplier-numbers", projectId],
+    queryFn: async () => {
+      const all: any[] = [];
+      let page = 1;
+      const pageSize = 1000;
+      while (true) {
+        const response = await api.getSupplierNumbers(projectId!, { page, pageSize });
+        if (!response.numbers || response.numbers.length === 0) break;
+        all.push(...response.numbers);
+        if (response.numbers.length < pageSize || all.length >= response.total) break;
+        page++;
+      }
+      return all;
+    },
+    enabled: !!projectId && !!suppliers,
+  });
+
   const fromTs = dateRange.from?.getTime();
   const toTs = dateRange.to?.getTime();
   const filteredCalls = useMemo(() => {
@@ -60,11 +87,32 @@ export default function ProjectSuppliers() {
     });
   }, [calls, fromTs, toTs]);
 
+  const contactsCost = useMemo(() => {
+    const allNumbers = supplierNumbers || [];
+    const supplierCounts = new Map<string, number>();
+    for (const n of allNumbers) {
+      const sid = n.supplier_id;
+      if (!sid) continue;
+      supplierCounts.set(sid, (supplierCounts.get(sid) || 0) + 1);
+    }
+    let cost = 0;
+    for (const s of suppliers || []) {
+      const count = supplierCounts.get(s.id) || 0;
+      const ppc = Number((s as any).price_per_contact) || 0;
+      cost += count * ppc;
+    }
+    if (cost === 0 && allNumbers.length > 0) {
+      const pricePerNumber = Number((pricing as any)?.price_per_number) || 0;
+      cost = allNumbers.length * pricePerNumber;
+    }
+    return cost;
+  }, [supplierNumbers, suppliers, pricing]);
+
   const report = useMemo(() => {
     const allCalls = filteredCalls;
-    const ppc = (pricing as any)?.price_per_contact ?? 0;
+    const allNumbers = supplierNumbers || [];
+    const totalNumbersCount = allNumbers.length || 1;
 
-    // Group calls by call_list
     const byList = new Map<string, {
       calledPhones: Set<string>;
       answeredPhones: Set<string>;
@@ -104,19 +152,21 @@ export default function ProjectSuppliers() {
       entry.totalDuration += c.duration_seconds || 0;
     }
 
+    const totalReceived = [...byList.values()].reduce((s, d) => s + d.calledPhones.size, 0) || 1;
+
     return [...byList.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([listName, d]) => {
         const received = d.calledPhones.size;
         const answeredUnique = d.answeredPhones.size;
-        const answeredCount = d.answeredCalls; // строк со статусом Успешный (как на Дашборде)
+        const answeredCount = d.answeredCalls;
         const leads = d.leadPhones.size;
 
         const answerRate = received > 0 ? +((answeredUnique / received) * 100).toFixed(1) : 0;
         const conversionRate = answeredCount > 0 ? +((leads / answeredCount) * 100).toFixed(1) : 0;
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
 
-        const spent = received * ppc;
+        const spent = Math.round(contactsCost * (received / totalReceived));
         const costPerLead = leads > 0 ? Math.round(spent / leads) : 0;
 
         return {
@@ -132,14 +182,12 @@ export default function ProjectSuppliers() {
           cost_per_lead: costPerLead,
         };
       });
-  }, [filteredCalls, pricing]);
+  }, [filteredCalls, contactsCost, supplierNumbers]);
 
-  // Totals — логика как на Дашборде: фильтр по timestamp, Дозвон = count строк
   const totals = useMemo(() => {
     const allCalls = filteredCalls;
     if (allCalls.length === 0) return null;
 
-    const ppc = (pricing as any)?.price_per_contact ?? 0;
     const calledPhones = new Set<string>();
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
@@ -156,7 +204,6 @@ export default function ProjectSuppliers() {
     }
     const received = calledPhones.size;
     const leads = leadPhones.size;
-    const spent = received * ppc;
 
     return {
       received,
@@ -165,10 +212,10 @@ export default function ProjectSuppliers() {
       answer_rate: received > 0 ? +((answeredPhones.size / received) * 100).toFixed(1) : 0,
       conversion_rate: answeredCount > 0 ? +((leads / answeredCount) * 100).toFixed(1) : 0,
       total_calls: totalCalls,
-      spent,
-      cost_per_lead: leads > 0 ? Math.round(spent / leads) : 0,
+      spent: contactsCost,
+      cost_per_lead: leads > 0 ? Math.round(contactsCost / leads) : 0,
     };
-  }, [filteredCalls, pricing]);
+  }, [filteredCalls, contactsCost]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);
@@ -235,17 +282,6 @@ export default function ProjectSuppliers() {
         )}
       </div>
 
-      {/* Summary cards */}
-      {totals && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-          <KPICard title="Получено номеров" value={totals.received.toLocaleString()} icon={Phone} delay={0} info="Количество уникальных номеров, по которым были звонки" />
-          <KPICard title="Дозвонились" value={`${totals.answered.toLocaleString()} (${totals.answer_rate}%)`} icon={PhoneCall} delay={0.05} info="Звонки со статусом «Успешный» (по строкам). % = уникальные дозвоны / уникальные попытки" />
-          <KPICard title="Лиды" value={totals.leads.toLocaleString()} icon={Target} delay={0.1} info="Уникальные номера, отмеченные как лид" />
-          <KPICard title="Конверсия в лид" value={`${totals.conversion_rate}%`} icon={TrendingUp} delay={0.15} info="Лиды / Дозвонились × 100%" />
-          <KPICard title="Потрачено" value={totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.2} info="Получено номеров × Стоимость контакта (ГЦК)" />
-          <KPICard title="₽ / лид" value={totals.cost_per_lead > 0 ? `${totals.cost_per_lead.toLocaleString()} ₽` : "—"} icon={DollarSign} delay={0.25} info="Потрачено / Лиды" />
-        </div>
-      )}
 
       {report.length === 0 ? (
         <div className="glass-card rounded-xl p-12 text-center">
@@ -326,6 +362,21 @@ export default function ProjectSuppliers() {
                     );
                   })}
                 </tbody>
+                {totals && (
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                      <td className="px-4 py-3">Итого</td>
+                      <td className="px-4 py-3">{totals.received.toLocaleString()}</td>
+                      <td className="px-4 py-3">{totals.answered.toLocaleString()}</td>
+                      <td className="px-4 py-3">{totals.answer_rate}%</td>
+                      <td className="px-4 py-3">{totals.leads.toLocaleString()}</td>
+                      <td className="px-4 py-3">{totals.conversion_rate}%</td>
+                      <td className="px-4 py-3">{totals.spent > 0 ? `${totals.spent.toLocaleString()} ₽` : "—"}</td>
+                      <td className="px-4 py-3">{totals.cost_per_lead > 0 ? `${totals.cost_per_lead.toLocaleString()} ₽` : "—"}</td>
+                      <td className="px-4 py-3"></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </motion.div>

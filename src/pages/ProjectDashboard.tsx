@@ -171,7 +171,7 @@ export default function ProjectDashboard() {
     const leads = leadPhones.size;
     const answerRate = attemptedPhones.size > 0 ? answerRatePercent(answeredPhones.size, attemptedPhones.size) : 0;
     const answeredUnique = answeredPhones.size;
-    const leadConversionPercent = answeredUnique > 0 ? Math.round((leads / answeredUnique) * 10000) / 100 : 0;
+    const leadConversionPercent = answeredCount > 0 ? Math.round((leads / answeredCount) * 10000) / 100 : 0;
     // Минуты только со статусом «Успешный»
     const totalMinutes = allCalls.reduce(
       (sum, c) => (isStatusSuccessful(c.status) ? sum + Math.ceil((Number(c.duration_seconds) || 0) / 60) : sum),
@@ -205,8 +205,7 @@ export default function ProjectDashboard() {
     const minutesCost = metrics.totalMinutes * pricePerMinute;
     const totalCost = contactsCost + minutesCost;
     const costPerLead = metrics.leads > 0 ? totalCost / metrics.leads : 0;
-    const costPerFirstContact = metrics.answeredCount > 0 ? totalCost / metrics.answeredCount : 0;
-    return { contactsCost, pricePerMinute, minutesCost, totalCost, costPerLead, costPerFirstContact };
+    return { contactsCost, pricePerMinute, minutesCost, totalCost, costPerLead };
   }, [allNumbers, suppliers, pricing, metrics]);
 
   // ---- Базы (per supplier) ----
@@ -403,7 +402,7 @@ export default function ProjectDashboard() {
           <KPICard title="Дозвонились" value={metrics.answeredCount.toLocaleString()} icon={PhoneCall} delay={0.1} info="Звонки со статусом «Успешный» (все попытки с дублями)" />
           <KPICard title="% дозвона" value={`${metrics.answerRate.toFixed(1)}%`} icon={Signal} delay={0.15} info="Уникальные дозвоны / Уникальные попытки × 100%" />
           <KPICard title="Лиды" value={metrics.leads.toLocaleString()} icon={Target} delay={0.2} info="Уникальные номера, отмеченные как лид" valueClassName="text-success" />
-          <KPICard title="В лид из дозвона" value={metrics.answeredUnique > 0 ? `${metrics.leadConversionPercent.toFixed(2)}%` : "—"} icon={TrendingUp} delay={0.22} info="Конверсия в лид из тех, кому дозвонились: уникальные лиды / уникальные дозвоны × 100%" />
+          <KPICard title="В лид из дозвона" value={metrics.answeredCount > 0 ? `${metrics.leadConversionPercent.toFixed(2)}%` : "—"} icon={TrendingUp} delay={0.22} info="Конверсия в лид из тех, кому дозвонились: лиды / дозвоны × 100%" />
         </div>
 
         {/* Daily trend chart */}
@@ -449,8 +448,7 @@ export default function ProjectDashboard() {
           <KPICard title="Стоимость контактов" value={finance.contactsCost > 0 ? finance.contactsCost.toLocaleString() : "—"} icon={DollarSign} delay={0.15} info="Сумма стоимости контакта по каждому поставщику" />
           <KPICard title="Стоимость минут" value={finance.minutesCost > 0 ? finance.minutesCost.toLocaleString() : "—"} icon={DollarSign} delay={0.2} info="Минуты (только звонки со статусом «Успешный») × Цена за минуту" />
           <KPICard title="Общая стоимость" value={finance.totalCost > 0 ? finance.totalCost.toLocaleString() : "—"} icon={DollarSign} delay={0.25} info="Стоимость контактов + Стоимость минут" />
-          <KPICard title="Стоимость первого контакта" value={finance.costPerFirstContact > 0 ? finance.costPerFirstContact.toFixed(0) : "—"} icon={DollarSign} delay={0.28} info="Общая стоимость / Дозвонились" />
-          <KPICard title="CPL" value={finance.costPerLead > 0 ? finance.costPerLead.toFixed(0) : "—"} icon={Target} delay={0.3} info="Cost Per Lead = Общая стоимость / Лиды" />
+          <KPICard title="CPL" value={finance.costPerLead > 0 ? finance.costPerLead.toFixed(0) : "—"} icon={Target} delay={0.28} info="Cost Per Lead = Общая стоимость / Лиды" />
         </div>
       </motion.div>
 
