@@ -84,8 +84,6 @@ router.get('/company', authenticate, async (req: AuthRequest, res) => {
       allProjectIds = [...projectIds];
     }
 
-    const hasDateFilter = !!(fromDate || toDate);
-
     if (allProjectIds.length === 0) {
       return res.json({
         summary: { totalMinutes: 0, projectCount: projectIds.length, totalMinutesCost: 0, totalContactsCost: 0, totalCost: 0, avgCostPerMinute: 0 },
@@ -112,22 +110,35 @@ router.get('/company', authenticate, async (req: AuthRequest, res) => {
       pricingResult.rows.map((r: any) => [r.project_id, { price_per_number: Number(r.price_per_number) || 0, price_per_minute: Number(r.price_per_minute) || 0 }])
     );
 
-    // Стоимость контактов по проекту: сумма по всем номерам (price_per_contact поставщика), иначе price_per_number * кол-во номеров
+    // Стоимость контактов по проекту: сумма по номерам (price_per_contact поставщика) с фильтром по дате, иначе price_per_number * кол-во
+    const snConditions = ['sn.project_id = ANY($1)'];
+    const snParams: any[] = [allProjectIds];
+    let snIdx = 2;
+    if (fromDate) {
+      snConditions.push(`sn.received_at >= $${snIdx++}::date`);
+      snParams.push(fromDate);
+    }
+    if (toDate) {
+      snConditions.push(`sn.received_at < ($${snIdx++}::date + interval '1 day')`);
+      snParams.push(toDate);
+    }
+    const snWhere = snConditions.join(' AND ');
+
     const contactsCostResult = await query(
       `SELECT sn.project_id, SUM(COALESCE(s.price_per_contact, 0)) as total
        FROM supplier_numbers sn
        INNER JOIN suppliers s ON s.id = sn.supplier_id
-       WHERE sn.project_id = ANY($1)
+       WHERE ${snWhere}
        GROUP BY sn.project_id`,
-      [allProjectIds]
+      snParams
     );
     const contactsCostByProject: Record<string, number> = {};
     for (const row of contactsCostResult.rows) {
       contactsCostByProject[row.project_id] = Number(row.total) || 0;
     }
     const numbersCountResult = await query(
-      'SELECT project_id, COUNT(*) as cnt FROM supplier_numbers WHERE project_id = ANY($1) GROUP BY project_id',
-      [allProjectIds]
+      `SELECT project_id, COUNT(*) as cnt FROM supplier_numbers sn WHERE ${snWhere} GROUP BY project_id`,
+      snParams
     );
     for (const row of numbersCountResult.rows) {
       const pid = row.project_id;
@@ -180,10 +191,7 @@ router.get('/company', authenticate, async (req: AuthRequest, res) => {
       const leads = leadsByProject[pid] || 0;
       const pricePerMinute = pricingByProject[pid]?.price_per_minute ?? 0;
       const minutesCost = Math.round(minutes * pricePerMinute * 100) / 100;
-      // При выбранном периоде учитываем стоимость контактов только у проектов с активностью (звонками) в этом периоде
-      const rawContactsCost = contactsCostByProject[pid] ?? 0;
-      const contactsCost = (hasDateFilter && minutes === 0 ? 0 : rawContactsCost);
-      const contactsCostRounded = Math.round(contactsCost * 100) / 100;
+      const contactsCostRounded = Math.round((contactsCostByProject[pid] ?? 0) * 100) / 100;
       const cost = Math.round((contactsCostRounded + minutesCost) * 100) / 100;
       totalMinutes += minutes;
       totalCost += cost;
