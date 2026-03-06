@@ -24,16 +24,25 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       return res.json({ projects: [] });
     }
 
+    // Last business day: Mon→Fri(-3), Sun→Fri(-2), Sat→Fri(-1), otherwise yesterday
+    const LAST_WORKDAY = `CASE EXTRACT(dow FROM CURRENT_DATE)
+      WHEN 1 THEN CURRENT_DATE - 3
+      WHEN 0 THEN CURRENT_DATE - 2
+      WHEN 6 THEN CURRENT_DATE - 1
+      ELSE CURRENT_DATE - 1
+    END`;
+
     const result = await query(
       `SELECT
         p.id,
         p.name,
         COALESCE(ps.is_active, true) as is_active,
         MAX(c.call_at) as last_call_at,
-        COUNT(*) FILTER (WHERE c.call_at::date = CURRENT_DATE - 1) as yesterday_calls,
-        COUNT(*) FILTER (WHERE ${SUCCESSFUL_STATUS} AND c.call_at::date = CURRENT_DATE - 1) as yesterday_answered,
-        COUNT(DISTINCT c.phone_normalized) FILTER (WHERE c.is_lead AND c.call_at::date = CURRENT_DATE - 1) as yesterday_leads,
-        (SELECT MAX(ij.created_at) FROM import_jobs ij WHERE ij.project_id = p.id) as last_import_at
+        COUNT(*) FILTER (WHERE c.call_at::date = (${LAST_WORKDAY})) as yesterday_calls,
+        COUNT(*) FILTER (WHERE ${SUCCESSFUL_STATUS} AND c.call_at::date = (${LAST_WORKDAY})) as yesterday_answered,
+        COUNT(DISTINCT c.phone_normalized) FILTER (WHERE c.is_lead AND c.call_at::date = (${LAST_WORKDAY})) as yesterday_leads,
+        (SELECT MAX(ij.created_at) FROM import_jobs ij WHERE ij.project_id = p.id) as last_import_at,
+        (${LAST_WORKDAY})::text as check_date
       FROM projects p
       LEFT JOIN project_status ps ON ps.project_id = p.id
       LEFT JOIN calls c ON c.project_id = p.id
@@ -42,6 +51,8 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       ORDER BY p.name`,
       [projectIds]
     );
+
+    const checkDate = result.rows[0]?.check_date ?? null;
 
     const projects = result.rows.map((row: any) => ({
       projectId: row.id,
@@ -54,7 +65,7 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       yesterdayLeads: parseInt(row.yesterday_leads) || 0,
     }));
 
-    res.json({ projects });
+    res.json({ projects, checkDate });
   } catch (error: any) {
     console.error('Monitoring error:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });

@@ -66,10 +66,15 @@ export default function Monitoring() {
   });
 
   const projects: any[] = data?.projects ?? [];
+  const checkDate = data?.checkDate ?? null;
+  const checkDateLabel = checkDate
+    ? new Date(checkDate).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", weekday: "short" })
+    : "вчера";
+
   const sorted = [...projects]
     .map((p) => ({ ...p, status: getStatus(p) }))
     .sort((a, b) => {
-      const order: Record<Status, number> = { problem: 0, warning: 1, ok: 2, inactive: 3 };
+      const order: Record<Status, number> = { ok: 0, warning: 1, problem: 2, inactive: 3 };
       return order[a.status] - order[b.status];
     });
 
@@ -160,7 +165,7 @@ export default function Monitoring() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                {["Проект", "Статус", "Звонки вчера", "Дозвон вчера", "Лиды вчера", "Последний звонок", "Последний импорт", ""].map((h) => (
+                {[`Проект`, `Статус`, `Звонки ${checkDateLabel}`, `Дозвон ${checkDateLabel}`, `Лиды ${checkDateLabel}`, `Последний звонок`, `Последний импорт`, ``].map((h) => (
                   <th key={h} className="text-left px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                 ))}
               </tr>
