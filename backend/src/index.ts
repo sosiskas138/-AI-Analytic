@@ -136,7 +136,8 @@ app.listen(Number(PORT), HOST, () => {
       const count = parseInt(String((userCount.rows[0] as any)?.count || '0'), 10);
       if (count === 0) {
         const email = 'admin@app.local';
-        const hash = await hashPassword('admin1');
+        const adminPassword = process.env.ADMIN_PASSWORD || 'admin1';
+        const hash = await hashPassword(adminPassword);
         await query(
           'INSERT INTO users (email, password_hash) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING',
           [email, hash]
@@ -153,7 +154,7 @@ app.listen(Number(PORT), HOST, () => {
            ON CONFLICT (user_id, role) DO NOTHING`,
           [email]
         );
-        console.log('Database: seed admin created (login: admin, password: admin1)');
+        console.log(`Database: seed admin created (login: admin@app.local, password: ${adminPassword})`);
       }
     } catch (e) {
       console.error('Database: seed failed', (e as Error).message);

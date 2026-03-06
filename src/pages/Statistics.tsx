@@ -46,12 +46,33 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-type PeriodPreset = "month" | "quarter" | "year" | "all" | "custom";
+type PeriodPreset = "today" | "yesterday" | "day_before" | "week" | "last_week" | "month" | "quarter" | "year" | "all" | "custom";
 
 function getPeriodRange(preset: PeriodPreset, customRange?: { from?: Date; to?: Date }): { from: string; to: string } {
   const now = new Date();
   if (preset === "custom" && customRange?.from && customRange?.to) {
     return { from: format(customRange.from, "yyyy-MM-dd"), to: format(customRange.to, "yyyy-MM-dd") };
+  }
+  if (preset === "today") {
+    const d = format(now, "yyyy-MM-dd");
+    return { from: d, to: d };
+  }
+  if (preset === "yesterday") {
+    const d = format(subDays(now, 1), "yyyy-MM-dd");
+    return { from: d, to: d };
+  }
+  if (preset === "day_before") {
+    const d = format(subDays(now, 2), "yyyy-MM-dd");
+    return { from: d, to: d };
+  }
+  if (preset === "week") {
+    const start = startOfWeek(now, { weekStartsOn: 1 });
+    return { from: format(start, "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+  }
+  if (preset === "last_week") {
+    const end = subDays(startOfWeek(now, { weekStartsOn: 1 }), 1);
+    const start = startOfWeek(end, { weekStartsOn: 1 });
+    return { from: format(start, "yyyy-MM-dd"), to: format(end, "yyyy-MM-dd") };
   }
   if (preset === "month") {
     const start = startOfMonth(subMonths(now, 1));
@@ -71,6 +92,15 @@ function getPeriodRange(preset: PeriodPreset, customRange?: { from?: Date; to?: 
   }
   return { from: "", to: "" };
 }
+
+const QUICK_PRESETS: { label: string; value: PeriodPreset }[] = [
+  { label: "Сегодня", value: "today" },
+  { label: "Вчера", value: "yesterday" },
+  { label: "Позавчера", value: "day_before" },
+  { label: "Неделя", value: "week" },
+  { label: "Прошлая неделя", value: "last_week" },
+  { label: "Всё время", value: "all" },
+];
 
 const CPL_CATEGORY_COLOR: Record<string, string> = {
   A: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
@@ -216,57 +246,49 @@ export default function Statistics() {
     <div className="space-y-8 p-4 md:p-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Статистика</h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <Select value={periodPreset} onValueChange={(v) => setPeriodPreset(v as PeriodPreset)}>
-            <SelectTrigger className="w-[160px]">
-              <CalendarIcon className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Период" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">Прошлый месяц</SelectItem>
-              <SelectItem value="quarter">Прошлый квартал</SelectItem>
-              <SelectItem value="year">Прошлый год</SelectItem>
-              <SelectItem value="all">Всё время</SelectItem>
-              <SelectItem value="custom">Свой период</SelectItem>
-            </SelectContent>
-          </Select>
-          {periodPreset === "custom" && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "min-w-[200px] justify-start text-left font-normal",
-                    (customRange.from || customRange.to) && "border-primary text-primary"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customRange.from && customRange.to
-                    ? `${format(customRange.from, "dd.MM.yyyy", { locale: ru })} – ${format(customRange.to, "dd.MM.yyyy", { locale: ru })}`
-                    : customRange.from
-                      ? `${format(customRange.from, "dd.MM.yyyy", { locale: ru })} – ...`
-                      : "Выберите период"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  selected={customRange.from || customRange.to ? { from: customRange.from, to: customRange.to } : undefined}
-                  onSelect={(range) => {
-                    setCustomRange({
-                      from: range?.from ? startOfDay(range.from) : undefined,
-                      to: range?.to ? endOfDay(range.to) : undefined,
-                    });
-                  }}
-                  numberOfMonths={2}
-                  className="p-3"
-                />
-              </PopoverContent>
-            </Popover>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          {QUICK_PRESETS.map((p) => (
+            <Button
+              key={p.value}
+              variant={periodPreset === p.value ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs px-2.5"
+              onClick={() => setPeriodPreset(p.value)}
+            >
+              {p.label}
+            </Button>
+          ))}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={periodPreset === "custom" ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs px-2.5 gap-1"
+              >
+                <CalendarIcon className="h-3 w-3" />
+                {periodPreset === "custom" && customRange.from && customRange.to
+                  ? `${format(customRange.from, "dd.MM.yy", { locale: ru })} – ${format(customRange.to, "dd.MM.yy", { locale: ru })}`
+                  : "Период"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={customRange.from || customRange.to ? { from: customRange.from, to: customRange.to } : undefined}
+                onSelect={(range) => {
+                  setPeriodPreset("custom");
+                  setCustomRange({
+                    from: range?.from ? startOfDay(range.from) : undefined,
+                    to: range?.to ? endOfDay(range.to) : undefined,
+                  });
+                }}
+                numberOfMonths={2}
+                className="p-3"
+              />
+            </PopoverContent>
+          </Popover>
           <Select value={projectFilter} onValueChange={setProjectFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] h-7 text-xs">
               <SelectValue placeholder="Проект" />
             </SelectTrigger>
             <SelectContent>

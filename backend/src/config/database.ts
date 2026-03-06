@@ -15,6 +15,10 @@ export const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
+pool.on('connect', (client) => {
+  client.query("SET timezone = 'Europe/Moscow'");
+});
+
 export async function query(text: string, params?: any[]) {
   const start = Date.now();
   try {
