@@ -24,6 +24,7 @@ import {
   Package,
   DollarSign,
   UserCheck,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,7 @@ export function AppSidebar({ projectId, onNavigate }: SidebarProps) {
   });
   const mainNav = [
     { to: "/projects", icon: FolderKanban, label: "Проекты" },
+    ...(isAdmin ? [{ to: "/monitoring", icon: Activity, label: "Мониторинг" }] : []),
     ...(isAdmin ? [{ to: "/statistics", icon: BarChart3, label: "Статистика" }] : []),
     ...(isAdmin ? [{ to: "/reanimation", icon: RefreshCw, label: "Реанимация" }] : []),
     ...(isAdmin ? [{ to: "/admin", icon: Settings, label: "Админка" }] : []),

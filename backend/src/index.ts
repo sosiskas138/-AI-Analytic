@@ -11,6 +11,7 @@ import importCsvRoutes from './routes/import-csv.js';
 import reanimationRoutes from './routes/reanimation.js';
 import statisticsRoutes from './routes/statistics.js';
 import settingsRoutes from './routes/settings.js';
+import monitoringRoutes from './routes/monitoring.js';
 import { query } from './config/database.js';
 import { hashPassword } from './config/auth.js';
 
@@ -105,6 +106,7 @@ app.use('/api/import-csv', importCsvRoutes);
 app.use('/api/reanimation', reanimationRoutes);
 app.use('/api/statistics', statisticsRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 
 // 404 handler (return JSON so frontend never gets HTML error page)
 app.use((_req, res) => {

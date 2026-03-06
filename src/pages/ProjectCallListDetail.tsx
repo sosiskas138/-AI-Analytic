@@ -55,9 +55,56 @@ export default function ProjectCallListDetail() {
     enabled: !!projectId,
   });
 
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers", projectId],
+    queryFn: async () => {
+      const response = await api.getSuppliers(projectId!);
+      return response.suppliers || [];
+    },
+    enabled: !!projectId,
+  });
+
+  const { data: supplierNumbers } = useQuery({
+    queryKey: ["supplier-numbers", projectId],
+    queryFn: async () => {
+      const all: any[] = [];
+      let page = 1;
+      const pageSize = 1000;
+      while (true) {
+        const response = await api.getSupplierNumbers(projectId!, { page, pageSize });
+        if (!response.numbers || response.numbers.length === 0) break;
+        all.push(...response.numbers);
+        if (response.numbers.length < pageSize || all.length >= response.total) break;
+        page++;
+      }
+      return all;
+    },
+    enabled: !!projectId && !!suppliers,
+  });
+
+  const totalContactsCost = useMemo(() => {
+    const allNumbers = supplierNumbers || [];
+    const supplierCounts = new Map<string, number>();
+    for (const n of allNumbers) {
+      const sid = n.supplier_id;
+      if (!sid) continue;
+      supplierCounts.set(sid, (supplierCounts.get(sid) || 0) + 1);
+    }
+    let cost = 0;
+    for (const s of suppliers || []) {
+      const count = supplierCounts.get(s.id) || 0;
+      const ppc = Number((s as any).price_per_contact) || 0;
+      cost += count * ppc;
+    }
+    if (cost === 0 && allNumbers.length > 0) {
+      const pricePerNumber = Number((pricing as any)?.price_per_number) || 0;
+      cost = allNumbers.length * pricePerNumber;
+    }
+    return cost;
+  }, [supplierNumbers, suppliers, pricing]);
+
   const dailyReport = useMemo(() => {
     const allCalls = calls || [];
-    const ppc = (pricing as any)?.price_per_contact ?? 0;
 
     const byDate = new Map<string, {
       calledPhones: Set<string>;
@@ -97,6 +144,8 @@ export default function ProjectCallListDetail() {
       entry.totalDuration += c.duration_seconds || 0;
     }
 
+    const totalReceived = [...byDate.values()].reduce((s, d) => s + d.calledPhones.size, 0) || 1;
+
     return [...byDate.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, d]) => {
@@ -106,12 +155,12 @@ export default function ProjectCallListDetail() {
         const answerRate = received > 0 ? +((answered / received) * 100).toFixed(1) : 0;
         const conversionRate = answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0;
         const avgDuration = d.answeredCalls > 0 ? Math.round(d.totalDuration / d.answeredCalls) : 0;
-        const spent = received * ppc;
+        const spent = Math.round(totalContactsCost * (received / totalReceived));
         const costPerLead = leads > 0 ? Math.round(spent / leads) : 0;
 
         return { date, received, answered, leads, answer_rate: answerRate, conversion_rate: conversionRate, total_calls: d.totalCalls, avg_duration: avgDuration, spent, cost_per_lead: costPerLead };
       });
-  }, [calls, dateRange, pricing]);
+  }, [calls, dateRange, totalContactsCost]);
 
   const totals = useMemo(() => {
     const allCalls = calls || [];
@@ -121,7 +170,6 @@ export default function ProjectCallListDetail() {
     const answeredPhones = new Set<string>();
     const leadPhones = new Set<string>();
     let totalCalls = 0;
-    let totalSpent = 0;
     for (const c of allCalls) {
       const date = c.call_at?.slice(0, 10) || "unknown";
       if (dateRange.from && date < format(dateRange.from, "yyyy-MM-dd")) continue;
@@ -134,17 +182,14 @@ export default function ProjectCallListDetail() {
     const received = calledPhones.size;
     const answered = answeredPhones.size;
     const leads = leadPhones.size;
-    // totalSpent = уникальные прозвоненные × ppc (не sum по дням — иначе один номер в разные дни считался бы дважды)
-    const ppc = (pricing as any)?.price_per_contact ?? 0;
-    totalSpent = received * ppc;
 
     return {
-      received, answered, leads, total_calls: totalCalls, spent: totalSpent,
+      received, answered, leads, total_calls: totalCalls, spent: totalContactsCost,
       answer_rate: received > 0 ? +((answered / received) * 100).toFixed(1) : 0,
       conversion_rate: answered > 0 ? +((leads / answered) * 100).toFixed(1) : 0,
-      cost_per_lead: leads > 0 ? Math.round(totalSpent / leads) : 0,
+      cost_per_lead: leads > 0 ? Math.round(totalContactsCost / leads) : 0,
     };
-  }, [calls, dateRange, pricing]);
+  }, [calls, dateRange, totalContactsCost]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);

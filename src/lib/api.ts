@@ -367,6 +367,11 @@ class ApiClient {
     });
   }
 
+  // Monitoring
+  async getMonitoring() {
+    return this.request<any>('/monitoring');
+  }
+
   // Cleanup orphaned records (admin only)
   async cleanupOrphanedRecords(): Promise<{
     message: string;
