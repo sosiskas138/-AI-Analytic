@@ -1,8 +1,8 @@
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Loader2, CheckCircle2, AlertTriangle, XCircle, ExternalLink } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, XCircle, ExternalLink, Power } from "lucide-react";
 import { motion } from "framer-motion";
 import { KPICard } from "@/components/KPICard";
 import { cn } from "@/lib/utils";
@@ -27,9 +27,10 @@ function formatDate(dateStr: string | null): string {
   return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-type Status = "ok" | "warning" | "problem";
+type Status = "ok" | "warning" | "problem" | "inactive";
 
 function getStatus(row: any): Status {
+  if (!row.isActive) return "inactive";
   const hasYesterday = row.yesterdayCalls > 0;
   const importFresh = row.lastImportAt &&
     (Date.now() - new Date(row.lastImportAt).getTime()) < IMPORT_FRESH_HOURS * 60 * 60 * 1000;
@@ -42,11 +43,13 @@ const STATUS_CONFIG = {
   ok: { icon: CheckCircle2, label: "Ок", color: "text-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
   warning: { icon: AlertTriangle, label: "Частично", color: "text-amber-600", bg: "bg-amber-500/10", border: "border-amber-500/20" },
   problem: { icon: XCircle, label: "Проблема", color: "text-red-600", bg: "bg-red-500/10", border: "border-red-500/20" },
+  inactive: { icon: Power, label: "Неактивен", color: "text-gray-400", bg: "bg-gray-500/10", border: "border-gray-500/20" },
 };
 
 export default function Monitoring() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
 
   if (!isAdmin) return <Navigate to="/projects" replace />;
 
@@ -56,18 +59,26 @@ export default function Monitoring() {
     refetchInterval: 60000,
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: ({ projectId, isActive }: { projectId: string; isActive: boolean }) =>
+      api.setProjectActive(projectId, isActive),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["monitoring"] }),
+  });
+
   const projects: any[] = data?.projects ?? [];
   const sorted = [...projects]
     .map((p) => ({ ...p, status: getStatus(p) }))
     .sort((a, b) => {
-      const order: Record<Status, number> = { problem: 0, warning: 1, ok: 2 };
+      const order: Record<Status, number> = { problem: 0, warning: 1, ok: 2, inactive: 3 };
       return order[a.status] - order[b.status];
     });
 
-  const totalCount = sorted.length;
-  const okCount = sorted.filter((p) => p.status === "ok").length;
-  const warningCount = sorted.filter((p) => p.status === "warning").length;
-  const problemCount = sorted.filter((p) => p.status === "problem").length;
+  const activeProjects = sorted.filter((p) => p.status !== "inactive");
+  const inactiveProjects = sorted.filter((p) => p.status === "inactive");
+
+  const okCount = activeProjects.filter((p) => p.status === "ok").length;
+  const warningCount = activeProjects.filter((p) => p.status === "warning").length;
+  const problemCount = activeProjects.filter((p) => p.status === "problem").length;
 
   if (isLoading && !data) {
     return (
@@ -77,15 +88,71 @@ export default function Monitoring() {
     );
   }
 
+  const renderRow = (row: any, i: number) => {
+    const cfg = STATUS_CONFIG[row.status as Status];
+    const Icon = cfg.icon;
+    const isInactive = row.status === "inactive";
+
+    return (
+      <motion.tr
+        key={row.projectId}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: i * 0.02 }}
+        className={cn(
+          "border-b border-border/50 hover:bg-muted/30 transition-colors",
+          row.status === "problem" && "bg-red-500/5",
+          isInactive && "opacity-50"
+        )}
+      >
+        <td className="px-4 py-3 font-medium">{row.projectName}</td>
+        <td className="px-4 py-3">
+          <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border", cfg.bg, cfg.color, cfg.border)}>
+            <Icon className="h-3 w-3" />
+            {cfg.label}
+          </span>
+        </td>
+        <td className="px-4 py-3">{row.yesterdayCalls > 0 ? row.yesterdayCalls.toLocaleString() : <span className={isInactive ? "text-gray-400" : "text-red-500 font-medium"}>0</span>}</td>
+        <td className="px-4 py-3">{row.yesterdayAnswered > 0 ? row.yesterdayAnswered.toLocaleString() : "0"}</td>
+        <td className="px-4 py-3 font-semibold">{row.yesterdayLeads > 0 ? row.yesterdayLeads : "0"}</td>
+        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap" title={formatDate(row.lastCallAt)}>{timeAgo(row.lastCallAt)}</td>
+        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap" title={formatDate(row.lastImportAt)}>{timeAgo(row.lastImportAt)}</td>
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/projects/${row.projectId}/dashboard`)}
+              className="text-primary hover:underline inline-flex items-center gap-1 text-xs"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </button>
+            <button
+              onClick={() => toggleMutation.mutate({ projectId: row.projectId, isActive: !row.isActive })}
+              title={row.isActive ? "Деактивировать" : "Активировать"}
+              className={cn(
+                "inline-flex items-center gap-1 text-xs rounded-full p-1 transition-colors",
+                row.isActive
+                  ? "text-gray-400 hover:text-red-500 hover:bg-red-500/10"
+                  : "text-gray-400 hover:text-emerald-500 hover:bg-emerald-500/10"
+              )}
+            >
+              <Power className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </td>
+      </motion.tr>
+    );
+  };
+
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-[1400px] mx-auto">
       <h1 className="text-2xl font-bold tracking-tight">Мониторинг</h1>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <KPICard title="Всего проектов" value={totalCount} icon={CheckCircle2} delay={0} />
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+        <KPICard title="Активные" value={activeProjects.length} icon={CheckCircle2} delay={0} />
         <KPICard title="Обновлены" value={okCount} icon={CheckCircle2} delay={0.05} valueClassName="text-emerald-600" />
         <KPICard title="Частично" value={warningCount} icon={AlertTriangle} delay={0.1} valueClassName="text-amber-600" />
         <KPICard title="Не обновлены" value={problemCount} icon={XCircle} delay={0.15} valueClassName="text-red-600" />
+        <KPICard title="Неактивные" value={inactiveProjects.length} icon={Power} delay={0.2} valueClassName="text-gray-400" />
       </div>
 
       <div className="glass-card rounded-xl overflow-hidden">
@@ -99,50 +166,24 @@ export default function Monitoring() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row, i) => {
-                const cfg = STATUS_CONFIG[row.status as Status];
-                const Icon = cfg.icon;
-                return (
-                  <motion.tr
-                    key={row.projectId}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.02 }}
-                    className={cn(
-                      "border-b border-border/50 hover:bg-muted/30 transition-colors",
-                      row.status === "problem" && "bg-red-500/5"
-                    )}
-                  >
-                    <td className="px-4 py-3 font-medium">{row.projectName}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border", cfg.bg, cfg.color, cfg.border)}>
-                        <Icon className="h-3 w-3" />
-                        {cfg.label}
-                      </span>
+              {activeProjects.map((row, i) => renderRow(row, i))}
+              {inactiveProjects.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={8} className="px-4 py-2 text-xs font-medium text-gray-400 bg-muted/20 uppercase tracking-wider">
+                      Неактивные проекты ({inactiveProjects.length})
                     </td>
-                    <td className="px-4 py-3">{row.yesterdayCalls > 0 ? row.yesterdayCalls.toLocaleString() : <span className="text-red-500 font-medium">0</span>}</td>
-                    <td className="px-4 py-3">{row.yesterdayAnswered > 0 ? row.yesterdayAnswered.toLocaleString() : "0"}</td>
-                    <td className="px-4 py-3 font-semibold">{row.yesterdayLeads > 0 ? row.yesterdayLeads : "0"}</td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap" title={formatDate(row.lastCallAt)}>{timeAgo(row.lastCallAt)}</td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap" title={formatDate(row.lastImportAt)}>{timeAgo(row.lastImportAt)}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => navigate(`/projects/${row.projectId}/dashboard`)}
-                        className="text-primary hover:underline inline-flex items-center gap-1 text-xs"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </button>
-                    </td>
-                  </motion.tr>
-                );
-              })}
+                  </tr>
+                  {inactiveProjects.map((row, i) => renderRow(row, activeProjects.length + i))}
+                </>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Обновляется каждую минуту. Зелёный = есть звонки за вчера и импорт за последние {IMPORT_FRESH_HOURS}ч. Красный = нет ни того, ни другого.
+        Обновляется каждую минуту. Зелёный = есть звонки за вчера и импорт за последние {IMPORT_FRESH_HOURS}ч. Красный = нет ни того, ни другого. Серый = проект деактивирован вручную. При новом импорте проект автоматически становится активным.
       </p>
     </div>
   );

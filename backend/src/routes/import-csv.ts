@@ -86,6 +86,13 @@ router.post('/', authenticate, requireProjectAccess, async (req: AuthRequest, re
     );
     const importJobId = jobResult.rows[0].id;
 
+    // Auto-activate project on import
+    await query(
+      `INSERT INTO project_status (project_id, is_active) VALUES ($1, true)
+       ON CONFLICT (project_id) DO UPDATE SET is_active = true`,
+      [project_id]
+    );
+
     if (type === 'suppliers') {
       if (!supplier_id) {
         return res.status(400).json({ error: 'supplier_id is required' });

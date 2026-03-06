@@ -372,6 +372,13 @@ class ApiClient {
     return this.request<any>('/monitoring');
   }
 
+  async setProjectActive(projectId: string, isActive: boolean) {
+    return this.request<any>(`/monitoring/${projectId}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    });
+  }
+
   // Cleanup orphaned records (admin only)
   async cleanupOrphanedRecords(): Promise<{
     message: string;
