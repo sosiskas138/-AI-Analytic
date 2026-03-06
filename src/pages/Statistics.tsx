@@ -149,7 +149,7 @@ export default function Statistics() {
   const projectsByAbc = useMemo(() => {
     if (abcFilter === "all") return projectsForComparison;
     return projectsForComparison.filter(
-      (p: any) => String(p?.abcCategory ?? "").trim().toUpperCase() === abcFilter
+      (p: any) => String(p?.cplCategory ?? "").trim().toUpperCase() === abcFilter
     );
   }, [projectsForComparison, abcFilter]);
 
@@ -331,6 +331,32 @@ export default function Statistics() {
         <CardContent className="space-y-6">
           {byMonth.length > 0 ? (
             <>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Минуты по {periodChartLabel}</p>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={monthChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} reversed={false} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="minutes" stroke="#3b82f6" name="Минуты" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Затраты по {periodChartLabel}</p>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={monthChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} reversed={false} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => [v.toLocaleString() + " ₽", "Затраты"]} />
+                      <Line type="monotone" dataKey="cost" stroke="#22c55e" name="Затраты, ₽" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -388,32 +414,6 @@ export default function Statistics() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Минуты по {periodChartLabel}</p>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={monthChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} reversed={false} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="minutes" stroke="#3b82f6" name="Минуты" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Затраты по {periodChartLabel}</p>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={monthChartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} reversed={false} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => [v.toLocaleString() + " ₽", "Затраты"]} />
-                      <Line type="monotone" dataKey="cost" stroke="#22c55e" name="Затраты, ₽" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
               </div>
             </>
           ) : (
@@ -487,8 +487,6 @@ export default function Statistics() {
                           ₽/мин {sortBy === "costPerMinute" ? sortDir === "desc" ? <ArrowDown className="h-3 w-3 shrink-0" /> : <ArrowUp className="h-3 w-3 shrink-0" /> : <ArrowUpDown className="h-3 w-3 shrink-0 opacity-50" />}
                         </span>
                       </TableHead>
-                      <TableHead className="text-right whitespace-nowrap">Доля затрат %</TableHead>
-                      <TableHead className="text-right whitespace-nowrap">Доля минут %</TableHead>
                       <TableHead className="text-right whitespace-nowrap">Статус</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -505,11 +503,9 @@ export default function Statistics() {
                         <TableCell className="text-right">{p.minutes.toLocaleString()}</TableCell>
                         <TableCell className="text-right">{p.cost.toLocaleString()} ₽</TableCell>
                         <TableCell className="text-right">{p.costPerMinute.toFixed(1)}</TableCell>
-                        <TableCell className="text-right">{p.shareCost}%</TableCell>
-                        <TableCell className="text-right">{p.shareMinutes}%</TableCell>
                         <TableCell className="text-right">
-                          <span className={cn("inline-flex items-center rounded px-2 py-0.5 text-xs font-medium", CPL_CATEGORY_COLOR[p.abcCategory] ?? "")}>
-                            {p.abcCategory ?? "—"}
+                          <span className={cn("inline-flex items-center rounded px-2 py-0.5 text-xs font-medium", CPL_CATEGORY_COLOR[p.cplCategory] ?? "")}>
+                            {p.cplCategory ?? "—"}
                           </span>
                         </TableCell>
                       </TableRow>
@@ -524,135 +520,6 @@ export default function Statistics() {
         </CardContent>
       </Card>
 
-      {/* ABC-анализ */}
-      <Card>
-        <CardHeader>
-          <CardTitle>ABC-анализ по проектам (по CPL)</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Пороги CPL: A ≤ {cplA.toLocaleString()} ₽, B: {cplA.toLocaleString()}–{cplC.toLocaleString()} ₽, C ≥ {cplC.toLocaleString()} ₽.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="rounded-lg border bg-card p-4">
-              <h4 className="font-semibold text-primary mb-2">Категория A</h4>
-              <p className="text-2xl font-bold">{abc.A?.length ?? 0} проектов</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Минуты: {(abc.contributionA?.minutes ?? 0).toLocaleString()}, затраты: {(abc.contributionA?.cost ?? 0).toLocaleString()} ₽
-              </p>
-              <ul className="mt-3 space-y-1 text-sm">
-                {(abc.A ?? []).slice(0, 5).map((p: any) => (
-                  <li
-                    key={p.projectId}
-                    className="cursor-pointer hover:underline"
-                    onClick={() => navigate(`/projects/${p.projectId}/dashboard`, { state: { from: "/statistics" } })}
-                  >
-                    {p.projectName}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-lg border bg-card p-4">
-              <h4 className="font-semibold mb-2">Категория B</h4>
-              <p className="text-2xl font-bold">{abc.B?.length ?? 0} проектов</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Минуты: {(abc.contributionB?.minutes ?? 0).toLocaleString()}, затраты: {(abc.contributionB?.cost ?? 0).toLocaleString()} ₽
-              </p>
-              <ul className="mt-3 space-y-1 text-sm">
-                {(abc.B ?? []).slice(0, 5).map((p: any) => (
-                  <li
-                    key={p.projectId}
-                    className="cursor-pointer hover:underline"
-                    onClick={() => navigate(`/projects/${p.projectId}/dashboard`, { state: { from: "/statistics" } })}
-                  >
-                    {p.projectName}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-lg border bg-card p-4">
-              <h4 className="font-semibold mb-2">Категория C</h4>
-              <p className="text-2xl font-bold">{abc.C?.length ?? 0} проектов</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Минуты: {(abc.contributionC?.minutes ?? 0).toLocaleString()}, затраты: {(abc.contributionC?.cost ?? 0).toLocaleString()} ₽
-              </p>
-              <ul className="mt-3 space-y-1 text-sm">
-                {(abc.C ?? []).slice(0, 5).map((p: any) => (
-                  <li
-                    key={p.projectId}
-                    className="cursor-pointer hover:underline"
-                    onClick={() => navigate(`/projects/${p.projectId}/dashboard`, { state: { from: "/statistics" } })}
-                  >
-                    {p.projectName}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Успешные / неэффективные по затратам */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              Успешные по CPL (топ-5)
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Лучший CPL (низкая стоимость лида)</p>
-          </CardHeader>
-          <CardContent>
-            {topEfficient.length > 0 ? (
-              <ul className="space-y-3">
-                {topEfficient.map((p: any) => (
-                  <li
-                    key={p.projectId}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
-                    onClick={() => navigate(`/projects/${p.projectId}/dashboard`, { state: { from: "/statistics" } })}
-                  >
-                    <span className="font-medium">{p.projectName}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {p.cpl?.toLocaleString()} ₽/лид · {p.leads?.toLocaleString()} лидов
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted-foreground text-sm">Нет данных.</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Неэффективные по CPL
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Наивысший CPL (топ-5)</p>
-          </CardHeader>
-          <CardContent>
-            {topInefficient.length > 0 ? (
-              <ul className="space-y-3">
-                {topInefficient.map((p: any) => (
-                  <li
-                    key={p.projectId}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
-                    onClick={() => navigate(`/projects/${p.projectId}/dashboard`, { state: { from: "/statistics" } })}
-                  >
-                    <span className="font-medium">{p.projectName}</span>
-                    <span className="text-sm text-destructive">
-                      {p.cpl?.toLocaleString()} ₽/лид · {p.cost?.toLocaleString()} ₽
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted-foreground text-sm">Нет проектов с лидами.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
         </>
       )}
     </div>
